@@ -114,6 +114,46 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
       return res.status(400).send("Missing messages");
     }
 
+    const prompt = getLastUserMessage(messages);
+
+    const stream = await openai.chat.completions.create({
+      model,
+      stream: true,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You generate valid Mermaid source for Excalidraw's Mermaid parser. Return only Mermaid code, no markdown fences, no explanation. For general requests use flowchart TD. Use simple ASCII node IDs like A, B, C. Use node labels like A[Start] and decisions like C{Valid?}. Use edge labels only in pipe form, for example C -->|Yes| D. Never use JSON, HTML, Excalidraw element objects, or prose.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+    });
+
+    let rawMermaid = "";
+
+    try {
+      for await (const event of stream) {
+        const delta = event.choices?.[0]?.delta?.content;
+        if (delta) {
+          rawMermaid += delta;
+        }
+      }
+    } catch (streamError) {
+      if (!rawMermaid || !isPrematureClose(streamError)) {
+        throw streamError;
+      }
+      console.warn("OpenAI stream ended with premature close after content; normalizing buffered Mermaid.");
+    }
+
+    const mermaid = sanitizeMermaid(rawMermaid);
+
+    if (!mermaid) {
+      return res.status(502).send("OpenAI returned an empty Mermaid diagram");
+    }
+
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
@@ -121,38 +161,11 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
       "X-Accel-Buffering": "no",
     });
 
-    const stream = await openai.responses.stream({
-      model,
-      input: [
-        {
-          role: "system",
-          content:
-            "You generate valid Mermaid diagrams for Excalidraw's Mermaid parser. Return only Mermaid source code, with no markdown fences and no explanation. Prefer flowchart TD for general diagrams. Do not return JSON, Excalidraw element objects, HTML, or prose. Keep node IDs simple ASCII identifiers like A, B, C. Quote labels with brackets, for example A[Start] --> B{Valid?}.",
-        },
-        ...messages.map((message) => ({
-          role: message.role === "assistant" ? "assistant" : "user",
-          content: normalizeMessageContent(message.content),
-        })),
-      ],
-    });
-
-    let sawContent = false;
-
-    try {
-      for await (const event of stream) {
-        if (event.type === "response.output_text.delta" && event.delta) {
-          sawContent = true;
-          writeSse(res, {
-            type: "content",
-            delta: sanitizeMermaidDelta(event.delta),
-          });
-        }
-      }
-    } catch (streamError) {
-      if (!sawContent || !isPrematureClose(streamError)) {
-        throw streamError;
-      }
-      console.warn("OpenAI stream ended with premature close after content; treating as complete.");
+    for (const chunk of chunkText(mermaid, 80)) {
+      writeSse(res, {
+        type: "content",
+        delta: chunk,
+      });
     }
 
     writeSse(res, {
@@ -218,10 +231,55 @@ function isPrematureClose(error) {
   return error instanceof Error && /premature close/i.test(error.message);
 }
 
-function sanitizeMermaidDelta(delta) {
-  return delta
+function getLastUserMessage(messages) {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index];
+    if (message?.role === "user") {
+      return normalizeMessageContent(message.content);
+    }
+  }
+
+  return normalizeMessageContent(messages[messages.length - 1]?.content);
+}
+
+function sanitizeMermaid(text) {
+  let mermaid = text
     .replace(/```mermaid/gi, "")
-    .replace(/```/g, "");
+    .replace(/```/g, "")
+    .trim();
+
+  const firstMermaidLine = mermaid.search(
+    /^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/im,
+  );
+  if (firstMermaidLine > 0) {
+    mermaid = mermaid.slice(firstMermaidLine).trim();
+  }
+
+  mermaid = mermaid
+    .split("\n")
+    .map((line) =>
+      line
+        .replace(/\s+$/g, "")
+        .replace(/(\w+)\s+--\s+([^|-][^-]*?)\s+-->\s+(\w+)/g, (_match, from, label, to) => {
+          return `${from} -->|${label.trim()}| ${to}`;
+        }),
+    )
+    .filter((line) => line.trim() && !/^Here(?:'s| is)\b/i.test(line.trim()))
+    .join("\n");
+
+  if (!/^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/i.test(mermaid)) {
+    mermaid = `flowchart TD\n${mermaid}`;
+  }
+
+  return mermaid;
+}
+
+function chunkText(text, size) {
+  const chunks = [];
+  for (let index = 0; index < text.length; index += size) {
+    chunks.push(text.slice(index, index + size));
+  }
+  return chunks;
 }
 
 function handleError(error, res) {
