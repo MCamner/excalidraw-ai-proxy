@@ -127,7 +127,7 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
         {
           role: "system",
           content:
-            "You help Excalidraw create diagrams. Return diagram instructions in the same text format requested by the client. Do not include markdown fences unless explicitly requested.",
+            "You generate valid Mermaid diagrams for Excalidraw's Mermaid parser. Return only Mermaid source code, with no markdown fences and no explanation. Prefer flowchart TD for general diagrams. Do not return JSON, Excalidraw element objects, HTML, or prose. Keep node IDs simple ASCII identifiers like A, B, C. Quote labels with brackets, for example A[Start] --> B{Valid?}.",
         },
         ...messages.map((message) => ({
           role: message.role === "assistant" ? "assistant" : "user",
@@ -144,7 +144,7 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
           sawContent = true;
           writeSse(res, {
             type: "content",
-            delta: event.delta,
+            delta: sanitizeMermaidDelta(event.delta),
           });
         }
       }
@@ -216,6 +216,12 @@ function writeSse(res, payload) {
 
 function isPrematureClose(error) {
   return error instanceof Error && /premature close/i.test(error.message);
+}
+
+function sanitizeMermaidDelta(delta) {
+  return delta
+    .replace(/```mermaid/gi, "")
+    .replace(/```/g, "");
 }
 
 function handleError(error, res) {
