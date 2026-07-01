@@ -8,6 +8,7 @@ dotenv.config();
 const app = express();
 const port = Number(process.env.PORT || 3016);
 const host = process.env.HOST || "127.0.0.1";
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "10mb";
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
   process.env.ALLOWED_ORIGIN ||
@@ -17,6 +18,17 @@ const allowedOrigins = (
   .map((origin) => origin.trim())
   .filter(Boolean);
 const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const textToDiagramModel = process.env.OPENAI_TEXT_TO_DIAGRAM_MODEL || model;
+const diagramToCodeModel = process.env.OPENAI_DIAGRAM_TO_CODE_MODEL || model;
+const openaiTimeoutMs = numberFromEnv("OPENAI_TIMEOUT_MS", 45_000);
+const openaiMaxRetries = numberFromEnv("OPENAI_MAX_RETRIES", 2);
+const textToDiagramTemperature = numberFromEnv("TEXT_TO_DIAGRAM_TEMPERATURE", 0.1);
+const textToDiagramMaxTokens = numberFromEnv("TEXT_TO_DIAGRAM_MAX_TOKENS", 1600);
+const diagramToCodeMaxTokens = numberFromEnv("DIAGRAM_TO_CODE_MAX_TOKENS", 4000);
+const maxPromptChars = numberFromEnv("MAX_PROMPT_CHARS", 6000);
+const rateLimitWindowMs = numberFromEnv("RATE_LIMIT_WINDOW_MS", 60_000);
+const rateLimitMaxRequests = numberFromEnv("RATE_LIMIT_MAX_REQUESTS", 20);
+const mermaidAutoRepair = booleanFromEnv("MERMAID_AUTO_REPAIR", true);
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("OPENAI_API_KEY is not set. API calls will fail until .env is configured.");
@@ -24,6 +36,8 @@ if (!process.env.OPENAI_API_KEY) {
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
+  timeout: openaiTimeoutMs,
+  maxRetries: openaiMaxRetries,
 });
 
 app.use(
@@ -39,7 +53,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Accept"],
   }),
 );
-app.use(express.json({ limit: "10mb" }));
+app.use(rateLimit({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests }));
+app.use(express.json({ limit: jsonBodyLimit }));
 app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
   next();
@@ -64,7 +79,8 @@ app.post("/v1/ai/diagram-to-code/generate", async (req, res) => {
         : "";
 
     const response = await openai.responses.create({
-      model,
+      model: diagramToCodeModel,
+      max_output_tokens: diagramToCodeMaxTokens,
       input: [
         {
           role: "system",
@@ -115,10 +131,15 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
     }
 
     const prompt = getLastUserMessage(messages);
+    if (prompt.length > maxPromptChars) {
+      return res.status(413).send(`Prompt is too long. Max ${maxPromptChars} characters.`);
+    }
 
     const stream = await openai.chat.completions.create({
-      model,
+      model: textToDiagramModel,
       stream: true,
+      temperature: textToDiagramTemperature,
+      max_tokens: textToDiagramMaxTokens,
       messages: [
         {
           role: "system",
@@ -148,7 +169,7 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
       console.warn("OpenAI stream ended with premature close after content; normalizing buffered Mermaid.");
     }
 
-    const mermaid = sanitizeMermaid(rawMermaid);
+    const mermaid = await normalizeMermaid(rawMermaid);
 
     if (!mermaid) {
       return res.status(502).send("OpenAI returned an empty Mermaid diagram");
@@ -223,6 +244,39 @@ function normalizeMessageContent(content) {
   return "";
 }
 
+function rateLimit({ windowMs, maxRequests }) {
+  const buckets = new Map();
+
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip || req.socket.remoteAddress || "local";
+    const bucket = buckets.get(key);
+
+    if (!bucket || now >= bucket.resetAt) {
+      buckets.set(key, {
+        count: 1,
+        resetAt: now + windowMs,
+      });
+      next();
+      return;
+    }
+
+    bucket.count += 1;
+
+    if (bucket.count > maxRequests) {
+      const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
+      res.set("Retry-After", String(retryAfterSeconds));
+      res.status(429).json({
+        message: "Too many requests",
+        retryAfterSeconds,
+      });
+      return;
+    }
+
+    next();
+  };
+}
+
 function writeSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
@@ -274,12 +328,73 @@ function sanitizeMermaid(text) {
   return mermaid;
 }
 
+async function normalizeMermaid(rawMermaid) {
+  const mermaid = sanitizeMermaid(rawMermaid);
+
+  if (!mermaidAutoRepair || isProbablyValidMermaid(mermaid)) {
+    return mermaid;
+  }
+
+  return repairMermaid(mermaid);
+}
+
+function isProbablyValidMermaid(mermaid) {
+  const lines = mermaid
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length < 2) {
+    return false;
+  }
+
+  if (!/^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/i.test(lines[0])) {
+    return false;
+  }
+
+  return lines.some((line) => /(-->|---|==>|-.->|:|\{|\[)/.test(line));
+}
+
+async function repairMermaid(mermaid) {
+  const response = await openai.chat.completions.create({
+    model: textToDiagramModel,
+    temperature: 0,
+    max_tokens: textToDiagramMaxTokens,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Repair Mermaid source so Excalidraw's Mermaid parser can import it. Return only Mermaid source, no markdown fences and no explanation. Prefer flowchart TD if the diagram type is unclear.",
+      },
+      {
+        role: "user",
+        content: mermaid,
+      },
+    ],
+  });
+
+  return sanitizeMermaid(response.choices?.[0]?.message?.content || mermaid);
+}
+
 function chunkText(text, size) {
   const chunks = [];
   for (let index = 0; index < text.length; index += size) {
     chunks.push(text.slice(index, index + size));
   }
   return chunks;
+}
+
+function numberFromEnv(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function booleanFromEnv(name, fallback) {
+  const value = process.env[name];
+  if (value === undefined) {
+    return fallback;
+  }
+  return /^(1|true|yes|on)$/i.test(value);
 }
 
 function handleError(error, res) {
