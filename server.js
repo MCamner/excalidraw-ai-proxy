@@ -144,7 +144,7 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
         {
           role: "system",
           content:
-            "You generate valid Mermaid source for Excalidraw's Mermaid parser. Return only Mermaid code, no markdown fences, no explanation. For general requests use flowchart TD. Use simple ASCII node IDs like A, B, C. Use node labels like A[Start] and decisions like C{Valid?}. Use edge labels only in pipe form, for example C -->|Yes| D. Never use JSON, HTML, Excalidraw element objects, or prose.",
+            "You generate valid Mermaid source for Excalidraw's Mermaid parser. Return only Mermaid code, no markdown fences, no explanation. Prefer flowchart TD unless the user explicitly asks for a sequence diagram. Use simple ASCII node IDs like A, B, C. Use node labels like A[Start] and decisions like C{Valid?}. Always wrap any node or edge label containing parentheses, slashes, ampersands, colons, or other punctuation in double quotes, for example B[\"Build (npm)\"] and C -->|\"Yes (200)\"| D. Use edge labels only in pipe form, for example C -->|Yes| D. Never use JSON, HTML, Excalidraw element objects, or prose.",
         },
         {
           role: "user",
@@ -325,7 +325,44 @@ function sanitizeMermaid(text) {
     mermaid = `flowchart TD\n${mermaid}`;
   }
 
+  // Flowchart labels containing Mermaid-significant punctuation (parentheses,
+  // slashes, ampersands, colons, ...) crash the parser unless quoted, which is
+  // the most common cause of "Generated an invalid diagram". Auto-quote them as
+  // a safety net regardless of what the model produced.
+  if (/^(flowchart|graph)\b/i.test(mermaid)) {
+    mermaid = mermaid.split("\n").map(quoteFlowchartLabels).join("\n");
+  }
+
   return mermaid;
+}
+
+// Characters that carry syntactic meaning in a Mermaid flowchart label and
+// therefore force the surrounding label to be quoted.
+const LABEL_NEEDS_QUOTING = /[()/\\&:;#<>]/;
+
+// Wraps a single label's text in double quotes when it holds punctuation that
+// would otherwise break the parser. Leaves already-quoted text and inner shape
+// wrappers (cylinder [(db)], stadium ([text])) untouched, and is idempotent.
+function quoteLabelText(inner) {
+  const trimmed = inner.trim();
+  if (!trimmed) {
+    return inner;
+  }
+  if (/^".*"$/.test(trimmed) || /^[([].*[)\]]$/.test(trimmed)) {
+    return inner;
+  }
+  if (!LABEL_NEEDS_QUOTING.test(trimmed)) {
+    return inner;
+  }
+  return `"${trimmed.replace(/"/g, "'")}"`;
+}
+
+// Quotes node labels ([...], {...}) and edge labels (|...|) on one line.
+function quoteFlowchartLabels(line) {
+  return line
+    .replace(/\[([^[\]]+)\]/g, (_m, inner) => `[${quoteLabelText(inner)}]`)
+    .replace(/\{([^{}]+)\}/g, (_m, inner) => `{${quoteLabelText(inner)}}`)
+    .replace(/\|([^|]+)\|/g, (_m, inner) => `|${quoteLabelText(inner)}|`);
 }
 
 async function normalizeMermaid(rawMermaid) {
