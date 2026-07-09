@@ -25,6 +25,7 @@ Status: in progress.
 - [ ] Document each sanitizer repair pattern next to its test.
 
 Success criteria:
+
 - Every known sanitizer rule has at least one regression test.
 - `npm test` is the default local confidence check.
 - Importing testable functions does not start the HTTP server.
@@ -39,6 +40,7 @@ Status: planned.
 - [ ] Add concise error paths for empty, invalid, or over-limit model output.
 
 Success criteria:
+
 - A broken model response can be diagnosed without guessing.
 - Sanitizer behavior is visible enough to improve prompts or tests.
 
@@ -52,6 +54,7 @@ Status: planned.
 - [ ] Keep the response free of secrets and API keys.
 
 Success criteria:
+
 - A local Excalidraw setup can quickly verify whether the proxy supports the expected AI surface.
 - Capability output helps catch endpoint drift from upstream Excalidraw changes.
 
@@ -72,6 +75,7 @@ test/fixtures/
 ```
 
 Success criteria:
+
 - Sanitizer, prompt contracts, OpenAI client setup, and route handling can be tested separately.
 - Refactors preserve the existing endpoints and local dev command.
 
