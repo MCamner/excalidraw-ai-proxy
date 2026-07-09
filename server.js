@@ -3,6 +3,14 @@ import dotenv from "dotenv";
 import express from "express";
 import OpenAI from "openai";
 import { pathToFileURL } from "url";
+import {
+  isProbablyValidMermaid,
+  sanitizeMermaid,
+  sanitizeMermaidWithReport,
+} from "./lib/mermaid-sanitize.js";
+import { systemPromptFor } from "./lib/prompt-contracts.js";
+
+export { sanitizeMermaid, sanitizeMermaidWithReport };
 
 dotenv.config();
 
@@ -233,26 +241,6 @@ if (isMainModule()) {
   });
 }
 
-// Base instructions for a single Mermaid diagram from a free-text request.
-const DEFAULT_SYSTEM_PROMPT =
-  "You generate valid Mermaid source for Excalidraw's Mermaid parser. Return only Mermaid code, no markdown fences, no explanation. Prefer flowchart TD unless the user explicitly asks for a sequence diagram. Use simple ASCII node IDs like A, B, C. Use node labels like A[Start] and decisions like C{Valid?}. Always wrap any node or edge label containing parentheses, slashes, ampersands, colons, or other punctuation in double quotes, for example B[\"Build (npm)\"] and C -->|\"Yes (200)\"| D. Use edge labels only in pipe form, for example C -->|Yes| D. Never use JSON, HTML, Excalidraw element objects, or prose.";
-
-// Richer instructions for architecture/system requests: group with subgraphs,
-// label the flow, and cap the size so the result stays importable.
-const ARCHITECTURE_SYSTEM_PROMPT =
-  "You generate valid Mermaid source for Excalidraw's Mermaid parser describing a software architecture. Return only Mermaid code, no markdown fences, no explanation. Use flowchart TD. Group related components with subgraph blocks that have descriptive titles. Show data and control flow with labeled edges. Use simple ASCII node IDs like A, B, S1, DB1. Always wrap every node label, subgraph title, and edge label in double quotes, for example S1[\"API Gateway\"], subgraph SVC[\"Services\"], and A -->|\"reads/writes\"| DB1. Do not use classDef, style lines, bare class statements with raw CSS such as class LEGEND fill:#fff, HTML, JSON, or prose. Do not use reserved words such as end as node IDs. Keep it to at most 25 nodes.";
-
-// Nudges the model toward the architecture prompt when the request looks like a
-// system/architecture ask (Swedish or English). Falls back to the default.
-const ARCHITECTURE_HINT =
-  /\b(arkitektur|architecture|c4|komponent|components?|system\s?design|dataflöd|data\s?flow|microservice|mikrotjänst|infrastruktur|infrastructure|topolog|deployment)/i;
-
-function systemPromptFor(prompt) {
-  return ARCHITECTURE_HINT.test(prompt || "")
-    ? ARCHITECTURE_SYSTEM_PROMPT
-    : DEFAULT_SYSTEM_PROMPT;
-}
-
 export function getCapabilities() {
   return {
     ok: true,
@@ -355,146 +343,6 @@ function getLastUserMessage(messages) {
   return normalizeMessageContent(messages[messages.length - 1]?.content);
 }
 
-export function sanitizeMermaid(text) {
-  return sanitizeMermaidWithReport(text).mermaid;
-}
-
-export function sanitizeMermaidWithReport(text) {
-  const repairReasons = [];
-  let mermaid = String(text ?? "");
-
-  const withoutFences = mermaid
-    .replace(/```mermaid/gi, "")
-    .replace(/```/g, "");
-  if (withoutFences !== mermaid) {
-    addRepairReason(repairReasons, "stripped_prose_and_fences");
-  }
-  mermaid = withoutFences.trim();
-
-  const firstMermaidLine = mermaid.search(
-    /^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/im,
-  );
-  if (firstMermaidLine > 0) {
-    addRepairReason(repairReasons, "stripped_prose_and_fences");
-    mermaid = mermaid.slice(firstMermaidLine).trim();
-  }
-
-  mermaid = mermaid
-    .split("\n")
-    .map((line) => {
-      const trimmedLine = line.replace(/\s+$/g, "");
-      return trimmedLine.replace(
-        /(\w+)\s+--\s+([^|-][^-]*?)\s+-->\s+(\w+)/g,
-        (_match, from, label, to) => {
-          addRepairReason(repairReasons, "normalized_loose_edge_label");
-          return `${from} -->|${label.trim()}| ${to}`;
-        },
-      );
-    })
-    .filter((line) => {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) {
-        return false;
-      }
-      if (/^Here(?:'s| is)\b/i.test(trimmedLine)) {
-        addRepairReason(repairReasons, "stripped_prose_and_fences");
-        return false;
-      }
-      return true;
-    })
-    .join("\n");
-
-  if (!/^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/i.test(mermaid)) {
-    addRepairReason(repairReasons, "added_default_flowchart");
-    mermaid = `flowchart TD\n${mermaid}`;
-  }
-
-  // Flowchart labels containing Mermaid-significant punctuation (parentheses,
-  // slashes, ampersands, colons, ...) crash the parser unless quoted, which is
-  // the most common cause of "Generated an invalid diagram". Auto-quote them as
-  // a safety net regardless of what the model produced.
-  if (/^(flowchart|graph)\b/i.test(mermaid)) {
-    mermaid = mermaid
-      .split("\n")
-      .filter((line) => {
-        const repairReason = flowchartStylingRepairReason(line);
-        if (repairReason) {
-          addRepairReason(repairReasons, repairReason);
-          return false;
-        }
-        return true;
-      })
-      .map((line) => {
-        const quotedLine = quoteFlowchartLabels(line);
-        if (quotedLine !== line) {
-          addRepairReason(repairReasons, "quoted_punctuation_labels");
-        }
-        return quotedLine;
-      })
-      .join("\n");
-  }
-
-  return {
-    mermaid,
-    repairApplied: repairReasons.length > 0,
-    repairReasons,
-  };
-}
-
-// The architecture prompt forbids styling, but models occasionally leak a
-// `classDef`, a `style ... fill:` line, or a malformed `class NODE fill:...`
-// statement (a bare `class` must reference a classDef name, not raw CSS).
-// Excalidraw's Mermaid parser rejects all three, so drop them defensively.
-// This runs only in the flowchart/graph branch, so classDiagram bodies
-// (`class Foo {`) — a different grammar — are never touched.
-const FLOWCHART_STYLING_LINE =
-  /^\s*(?:classDef\b|style\s+\S+\s+.*(?:fill|stroke|color)\s*:|class\s+[\w,\s]+\s+(?:fill|stroke|color)\s*:)/i;
-function isFlowchartStylingLine(line) {
-  return FLOWCHART_STYLING_LINE.test(line);
-}
-
-function flowchartStylingRepairReason(line) {
-  if (!isFlowchartStylingLine(line)) {
-    return "";
-  }
-  if (/^\s*classDef\b/i.test(line)) {
-    return "stripped_classdef_line";
-  }
-  if (/^\s*style\s+\S+\s+.*(?:fill|stroke|color)\s*:/i.test(line)) {
-    return "stripped_style_line";
-  }
-  return "stripped_invalid_class_line";
-}
-
-// Characters that carry syntactic meaning in a Mermaid flowchart label and
-// therefore force the surrounding label to be quoted.
-const LABEL_NEEDS_QUOTING = /[()/\\&:;#<>]/;
-
-// Wraps a single label's text in double quotes when it holds punctuation that
-// would otherwise break the parser. Leaves already-quoted text and inner shape
-// wrappers (cylinder [(db)], stadium ([text])) untouched, and is idempotent.
-function quoteLabelText(inner) {
-  const trimmed = inner.trim();
-  if (!trimmed) {
-    return inner;
-  }
-  if (/^".*"$/.test(trimmed) || /^[([].*[)\]]$/.test(trimmed)) {
-    return inner;
-  }
-  if (!LABEL_NEEDS_QUOTING.test(trimmed)) {
-    return inner;
-  }
-  return `"${trimmed.replace(/"/g, "'")}"`;
-}
-
-// Quotes node labels ([...], {...}) and edge labels (|...|) on one line.
-function quoteFlowchartLabels(line) {
-  return line
-    .replace(/\[([^[\]]+)\]/g, (_m, inner) => `[${quoteLabelText(inner)}]`)
-    .replace(/\{([^{}]+)\}/g, (_m, inner) => `{${quoteLabelText(inner)}}`)
-    .replace(/\|([^|]+)\|/g, (_m, inner) => `|${quoteLabelText(inner)}|`);
-}
-
 async function normalizeMermaid(rawMermaid) {
   const sanitized = sanitizeMermaidWithReport(rawMermaid);
 
@@ -517,23 +365,6 @@ async function normalizeMermaid(rawMermaid) {
   };
 }
 
-function isProbablyValidMermaid(mermaid) {
-  const lines = mermaid
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length < 2) {
-    return false;
-  }
-
-  if (!/^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/i.test(lines[0])) {
-    return false;
-  }
-
-  return lines.some((line) => /(-->|---|==>|-.->|:|\{|\[)/.test(line));
-}
-
 async function repairMermaid(mermaid) {
   const response = await openai.chat.completions.create({
     model: textToDiagramModel,
@@ -553,12 +384,6 @@ async function repairMermaid(mermaid) {
   });
 
   return sanitizeMermaidWithReport(response.choices?.[0]?.message?.content || mermaid);
-}
-
-function addRepairReason(repairReasons, reason) {
-  if (!repairReasons.includes(reason)) {
-    repairReasons.push(reason);
-  }
 }
 
 function uniqueRepairReasons(repairReasons) {

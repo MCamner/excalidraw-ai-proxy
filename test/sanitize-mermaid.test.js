@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-process.env.OPENAI_API_KEY = "test-key";
-
-const { sanitizeMermaid, sanitizeMermaidWithReport } = await import("../server.js");
+import { sanitizeMermaid, sanitizeMermaidWithReport } from "../lib/mermaid-sanitize.js";
 
 const cases = [
   {

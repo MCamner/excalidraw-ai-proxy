@@ -60,7 +60,7 @@ Success criteria:
 
 ## Phase 4: Split Server Responsibilities
 
-Status: planned.
+Status: in progress.
 
 Keep `server.js` small once test coverage exists. Candidate structure:
 
@@ -74,9 +74,16 @@ lib/prompt-contracts.js
 test/fixtures/
 ```
 
+- [x] Extract Mermaid sanitizer logic to `lib/mermaid-sanitize.js`.
+- [x] Extract prompt contracts to `lib/prompt-contracts.js`.
+- [ ] Extract OpenAI client setup.
+- [ ] Extract route registration or route handlers.
+
 Success criteria:
 
-- Sanitizer, prompt contracts, OpenAI client setup, and route handling can be tested separately.
+- Sanitizer can be tested separately through `lib/mermaid-sanitize.js`.
+- Prompt contracts can be tested separately through `lib/prompt-contracts.js`.
+- OpenAI client setup and route handling can be tested separately.
 - Refactors preserve the existing endpoints and local dev command.
 
 ## Not Now
