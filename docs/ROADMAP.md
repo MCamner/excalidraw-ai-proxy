@@ -60,7 +60,7 @@ Success criteria:
 
 ## Phase 4: Split Server Responsibilities
 
-Status: in progress.
+Status: complete.
 
 Keep `server.js` small once test coverage exists. Candidate structure:
 
@@ -76,14 +76,15 @@ test/fixtures/
 
 - [x] Extract Mermaid sanitizer logic to `lib/mermaid-sanitize.js`.
 - [x] Extract prompt contracts to `lib/prompt-contracts.js`.
-- [ ] Extract OpenAI client setup.
-- [ ] Extract route registration or route handlers.
+- [x] Extract OpenAI client setup to `lib/openai-client.js`.
+- [x] Extract route registration and handlers to `lib/excalidraw-routes.js`.
 
 Success criteria:
 
 - Sanitizer can be tested separately through `lib/mermaid-sanitize.js`.
 - Prompt contracts can be tested separately through `lib/prompt-contracts.js`.
-- OpenAI client setup and route handling can be tested separately.
+- OpenAI client setup can be tested separately through `lib/openai-client.js`.
+- Route handling can be tested separately through `lib/excalidraw-routes.js`.
 - Refactors preserve the existing endpoints and local dev command.
 
 ## Not Now
