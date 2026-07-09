@@ -9,14 +9,16 @@ Den här koden är en enkel Node.js-proxy för Excalidraw AI. Browsern skickar A
 - Endpoints:
   - `POST /v1/ai/diagram-to-code/generate`
   - `POST /v1/ai/text-to-diagram/chat-streaming`
+- Healthcheck: `GET /health`
 - Miljövariabler: se `.env.example`
 
 ## Arbetsflöde för denna workspace
 
-1. Håll ändringarna små och målade mot proxylogik.
+1. Håll ändringarna små och riktade mot proxylogik.
 2. Undvik att exponera API-nyckeln i klientkod.
 3. Behåll enklare konfiguration i `.env`.
 4. Dokumentera ändringar i `README.md` när du lägger till nya endpoints eller `.env`-inställningar.
+5. Behandla Mermaid-sanitizer och auto-repair som regressionskänslig logik.
 
 ## Workspace-specifik skill
 

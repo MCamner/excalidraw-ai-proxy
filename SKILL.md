@@ -1,5 +1,5 @@
 ---
-name: excalidraw-ai-proxy
+name: create-skill
 description: "Guide the user through creating a reusable SKILL.md file for this workspace."
 argument-hint: "Describe the workflow or outcome the new skill should produce."
 disable-model-invocation: true

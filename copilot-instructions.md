@@ -7,6 +7,8 @@ Use this workspace prompt to help write, fix, and document repository-specific t
 ## Purpose
 - Keep the proxy small, secure, and easy to run locally.
 - Support Excalidraw AI endpoints with OpenAI settings from `.env`.
+- Keep `OPENAI_API_KEY` server-side only; never place it in Excalidraw/browser config.
+- Treat Mermaid sanitizer and auto-repair changes as regression-sensitive logic.
 - Make sure the repo uses workspace-scoped skills and files when asked.
 
 ## Useful context
@@ -15,6 +17,7 @@ Use this workspace prompt to help write, fix, and document repository-specific t
 - Proxy endpoints:
   - `POST /v1/ai/diagram-to-code/generate`
   - `POST /v1/ai/text-to-diagram/chat-streaming`
+- Health endpoint: `GET /health`
 - Example environment variables are in `.env.example`.
 
 ## Workspace skill

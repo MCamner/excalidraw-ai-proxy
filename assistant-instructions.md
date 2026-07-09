@@ -9,6 +9,7 @@ This repository is a small Node.js proxy for Excalidraw AI. The browser forwards
 - Proxy endpoints:
   - `POST /v1/ai/diagram-to-code/generate`
   - `POST /v1/ai/text-to-diagram/chat-streaming`
+- Health endpoint: `GET /health`
 - Environment variables: see `.env.example`
 
 ## Workspace guidance
@@ -17,6 +18,7 @@ This repository is a small Node.js proxy for Excalidraw AI. The browser forwards
 - Do not expose `OPENAI_API_KEY` in client-side code.
 - Keep configuration in `.env` and document new settings.
 - Update `README.md` for any new endpoints or environment settings.
+- Treat Mermaid sanitizer and auto-repair changes as regression-sensitive logic.
 - Prefer repository-specific skills and files when asked.
 
 ## Repository skills
