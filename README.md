@@ -51,3 +51,15 @@ RATE_LIMIT_MAX_REQUESTS=20
 ```
 
 For higher quality diagram-to-code output, set `OPENAI_DIAGRAM_TO_CODE_MODEL` to a stronger multimodal model while keeping `OPENAI_TEXT_TO_DIAGRAM_MODEL` on a faster, cheaper model.
+
+## Workspace instruction files
+
+This repository includes workspace-specific assistant guidance in the following files:
+
+- `assistant-instructions.md`
+- `copilot-instructions.md`
+- `claude-instructions.md`
+- `codex-instructions.md`
+- `SKILL.md`
+
+Use these files to provide consistent, project-focused answers and to keep AI assistance aligned with the proxy server’s policy: small changes, secure API key handling, and documented endpoint updates.
