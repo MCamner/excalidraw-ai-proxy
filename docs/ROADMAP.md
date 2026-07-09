@@ -14,15 +14,15 @@ LLM output -> Mermaid error -> sanitizer fix -> regression test -> permanent lea
 
 ## Phase 1: Contract and Regression Tests
 
-Status: in progress.
+Status: complete.
 
 - [x] Add `docs/AI_CONTRACT.md`.
 - [x] Add `npm test` using Node's built-in test runner.
 - [x] Export `sanitizeMermaid` for focused tests.
 - [x] Add a regression fixture for leaked raw CSS class styling.
 - [x] Verify that `class LEGEND fill:#fff...` is removed while preserving diagram structure.
-- [ ] Add more fixtures for known Mermaid parser failures.
-- [ ] Document each sanitizer repair pattern next to its test.
+- [x] Add more fixtures for known Mermaid parser failures.
+- [x] Document each sanitizer repair pattern next to its test.
 
 Success criteria:
 
@@ -32,12 +32,12 @@ Success criteria:
 
 ## Phase 2: Better Observability
 
-Status: planned.
+Status: complete.
 
-- [ ] Track whether Mermaid repair was applied.
-- [ ] Log repair reasons, for example `stripped_invalid_class_line`.
-- [ ] Keep logs local and avoid storing prompts unless explicitly needed for debugging.
-- [ ] Add concise error paths for empty, invalid, or over-limit model output.
+- [x] Track whether Mermaid repair was applied.
+- [x] Log repair reasons, for example `stripped_invalid_class_line`.
+- [x] Keep logs local and avoid storing prompts unless explicitly needed for debugging.
+- [x] Add concise error paths for empty, invalid, or over-limit model output.
 
 Success criteria:
 

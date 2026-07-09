@@ -29,3 +29,14 @@ The proxy may remove invalid or unsafe Mermaid lines when:
 - removing it preserves the diagram structure
 
 Every repaired pattern should have a regression test.
+
+Current repaired patterns:
+
+- `stripped_invalid_class_line`: remove raw CSS-like `class NODE fill:#fff...` lines.
+- `stripped_classdef_line`: remove `classDef` styling lines from flowcharts.
+- `stripped_style_line`: remove `style NODE fill:#fff...` lines from flowcharts.
+- `stripped_prose_and_fences`: remove explanatory prose and Markdown code fences.
+- `normalized_loose_edge_label`: convert `A -- label --> B` to `A -->|label| B`.
+- `quoted_punctuation_labels`: quote flowchart node and edge labels containing Mermaid-significant punctuation.
+- `added_default_flowchart`: add `flowchart TD` when Mermaid output has no diagram header.
+- `openai_auto_repair`: use the model repair path after deterministic sanitizing when output still looks invalid.

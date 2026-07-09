@@ -169,10 +169,16 @@ app.post("/v1/ai/text-to-diagram/chat-streaming", async (req, res) => {
       console.warn("OpenAI stream ended with premature close after content; normalizing buffered Mermaid.");
     }
 
-    const mermaid = await normalizeMermaid(rawMermaid);
-
-    if (!mermaid) {
+    if (!rawMermaid.trim()) {
       return res.status(502).send("OpenAI returned an empty Mermaid diagram");
+    }
+
+    const normalization = await normalizeMermaid(rawMermaid);
+    const { mermaid } = normalization;
+    logMermaidRepairReport(normalization);
+
+    if (!isProbablyValidMermaid(mermaid)) {
+      return res.status(502).send("OpenAI returned invalid Mermaid after repair");
     }
 
     res.writeHead(200, {
@@ -319,31 +325,56 @@ function getLastUserMessage(messages) {
 }
 
 export function sanitizeMermaid(text) {
-  let mermaid = text
+  return sanitizeMermaidWithReport(text).mermaid;
+}
+
+export function sanitizeMermaidWithReport(text) {
+  const repairReasons = [];
+  let mermaid = String(text ?? "");
+
+  const withoutFences = mermaid
     .replace(/```mermaid/gi, "")
-    .replace(/```/g, "")
-    .trim();
+    .replace(/```/g, "");
+  if (withoutFences !== mermaid) {
+    addRepairReason(repairReasons, "stripped_prose_and_fences");
+  }
+  mermaid = withoutFences.trim();
 
   const firstMermaidLine = mermaid.search(
     /^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/im,
   );
   if (firstMermaidLine > 0) {
+    addRepairReason(repairReasons, "stripped_prose_and_fences");
     mermaid = mermaid.slice(firstMermaidLine).trim();
   }
 
   mermaid = mermaid
     .split("\n")
-    .map((line) =>
-      line
-        .replace(/\s+$/g, "")
-        .replace(/(\w+)\s+--\s+([^|-][^-]*?)\s+-->\s+(\w+)/g, (_match, from, label, to) => {
+    .map((line) => {
+      const trimmedLine = line.replace(/\s+$/g, "");
+      return trimmedLine.replace(
+        /(\w+)\s+--\s+([^|-][^-]*?)\s+-->\s+(\w+)/g,
+        (_match, from, label, to) => {
+          addRepairReason(repairReasons, "normalized_loose_edge_label");
           return `${from} -->|${label.trim()}| ${to}`;
-        }),
-    )
-    .filter((line) => line.trim() && !/^Here(?:'s| is)\b/i.test(line.trim()))
+        },
+      );
+    })
+    .filter((line) => {
+      const trimmedLine = line.trim();
+      if (!trimmedLine) {
+        return false;
+      }
+      if (/^Here(?:'s| is)\b/i.test(trimmedLine)) {
+        addRepairReason(repairReasons, "stripped_prose_and_fences");
+        return false;
+      }
+      return true;
+    })
     .join("\n");
 
   if (!/^(flowchart|graph|sequenceDiagram|classDiagram|erDiagram)\b/i.test(mermaid)) {
+    addRepairReason(repairReasons, "added_default_flowchart");
     mermaid = `flowchart TD\n${mermaid}`;
   }
 
@@ -354,12 +385,29 @@ export function sanitizeMermaid(text) {
   if (/^(flowchart|graph)\b/i.test(mermaid)) {
     mermaid = mermaid
       .split("\n")
-      .filter((line) => !isFlowchartStylingLine(line))
-      .map(quoteFlowchartLabels)
+      .filter((line) => {
+        const repairReason = flowchartStylingRepairReason(line);
+        if (repairReason) {
+          addRepairReason(repairReasons, repairReason);
+          return false;
+        }
+        return true;
+      })
+      .map((line) => {
+        const quotedLine = quoteFlowchartLabels(line);
+        if (quotedLine !== line) {
+          addRepairReason(repairReasons, "quoted_punctuation_labels");
+        }
+        return quotedLine;
+      })
       .join("\n");
   }
 
-  return mermaid;
+  return {
+    mermaid,
+    repairApplied: repairReasons.length > 0,
+    repairReasons,
+  };
 }
 
 // The architecture prompt forbids styling, but models occasionally leak a
@@ -372,6 +420,19 @@ const FLOWCHART_STYLING_LINE =
   /^\s*(?:classDef\b|style\s+\S+\s+.*(?:fill|stroke|color)\s*:|class\s+[\w,\s]+\s+(?:fill|stroke|color)\s*:)/i;
 function isFlowchartStylingLine(line) {
   return FLOWCHART_STYLING_LINE.test(line);
+}
+
+function flowchartStylingRepairReason(line) {
+  if (!isFlowchartStylingLine(line)) {
+    return "";
+  }
+  if (/^\s*classDef\b/i.test(line)) {
+    return "stripped_classdef_line";
+  }
+  if (/^\s*style\s+\S+\s+.*(?:fill|stroke|color)\s*:/i.test(line)) {
+    return "stripped_style_line";
+  }
+  return "stripped_invalid_class_line";
 }
 
 // Characters that carry syntactic meaning in a Mermaid flowchart label and
@@ -404,13 +465,25 @@ function quoteFlowchartLabels(line) {
 }
 
 async function normalizeMermaid(rawMermaid) {
-  const mermaid = sanitizeMermaid(rawMermaid);
+  const sanitized = sanitizeMermaidWithReport(rawMermaid);
 
-  if (!mermaidAutoRepair || isProbablyValidMermaid(mermaid)) {
-    return mermaid;
+  if (!mermaidAutoRepair || isProbablyValidMermaid(sanitized.mermaid)) {
+    return sanitized;
   }
 
-  return repairMermaid(mermaid);
+  const repaired = await repairMermaid(sanitized.mermaid);
+  const repairReasons = uniqueRepairReasons([
+    ...sanitized.repairReasons,
+    "openai_auto_repair",
+    ...repaired.repairReasons,
+  ]);
+
+  return {
+    mermaid: repaired.mermaid,
+    repairApplied: true,
+    repairReasons,
+    autoRepairApplied: true,
+  };
 }
 
 function isProbablyValidMermaid(mermaid) {
@@ -448,7 +521,32 @@ async function repairMermaid(mermaid) {
     ],
   });
 
-  return sanitizeMermaid(response.choices?.[0]?.message?.content || mermaid);
+  return sanitizeMermaidWithReport(response.choices?.[0]?.message?.content || mermaid);
+}
+
+function addRepairReason(repairReasons, reason) {
+  if (!repairReasons.includes(reason)) {
+    repairReasons.push(reason);
+  }
+}
+
+function uniqueRepairReasons(repairReasons) {
+  return [...new Set(repairReasons)];
+}
+
+function logMermaidRepairReport(report) {
+  if (!report.repairApplied) {
+    return;
+  }
+
+  console.info(
+    JSON.stringify({
+      event: "mermaid_repair",
+      repairApplied: true,
+      autoRepairApplied: Boolean(report.autoRepairApplied),
+      repairReasons: report.repairReasons,
+    }),
+  );
 }
 
 function chunkText(text, size) {
