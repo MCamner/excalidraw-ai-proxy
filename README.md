@@ -29,6 +29,11 @@ VITE_APP_PORT=3003
 - `POST /v1/ai/diagram-to-code/generate`
 - `POST /v1/ai/text-to-diagram/chat-streaming`
 
+## Project direction
+
+- [AI output contract](docs/AI_CONTRACT.md)
+- [Roadmap](docs/ROADMAP.md)
+
 ## Settings
 
 Useful `.env` settings:

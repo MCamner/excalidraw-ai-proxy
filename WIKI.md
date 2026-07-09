@@ -43,4 +43,5 @@ yarn start
 
 - Keep `.env` out of version control.
 - Document any new endpoints or `.env` settings in `README.md`.
+- Use `docs/AI_CONTRACT.md` and `docs/ROADMAP.md` to keep Mermaid sanitizer work testable.
 - Use the workspace instruction files to keep AI-generated changes aligned with repo expectations.

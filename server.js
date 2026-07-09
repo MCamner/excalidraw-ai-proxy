@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import OpenAI from "openai";
+import { pathToFileURL } from "url";
 
 dotenv.config();
 
@@ -215,10 +216,12 @@ app.use((err, _req, res, _next) => {
   handleError(err, res);
 });
 
-app.listen(port, host, () => {
-  console.log(`Excalidraw AI proxy listening on http://${host}:${port}`);
-  console.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
-});
+if (isMainModule()) {
+  app.listen(port, host, () => {
+    console.log(`Excalidraw AI proxy listening on http://${host}:${port}`);
+    console.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
+  });
+}
 
 // Base instructions for a single Mermaid diagram from a free-text request.
 const DEFAULT_SYSTEM_PROMPT =
@@ -315,7 +318,7 @@ function getLastUserMessage(messages) {
   return normalizeMessageContent(messages[messages.length - 1]?.content);
 }
 
-function sanitizeMermaid(text) {
+export function sanitizeMermaid(text) {
   let mermaid = text
     .replace(/```mermaid/gi, "")
     .replace(/```/g, "")
@@ -477,4 +480,8 @@ function handleError(error, res) {
     message,
     statusCode: status,
   });
+}
+
+function isMainModule() {
+  return process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 }
