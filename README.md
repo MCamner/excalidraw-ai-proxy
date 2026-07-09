@@ -26,6 +26,8 @@ VITE_APP_PORT=3003
 
 ## Endpoints
 
+- `GET /health`
+- `GET /v1/ai/capabilities`
 - `POST /v1/ai/diagram-to-code/generate`
 - `POST /v1/ai/text-to-diagram/chat-streaming`
 

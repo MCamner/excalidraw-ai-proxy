@@ -21,6 +21,8 @@ This repo is a minimal Node.js proxy for Excalidraw AI functionality. It separat
 
 ## Endpoints
 
+- `GET /health`
+- `GET /v1/ai/capabilities`
 - `POST /v1/ai/diagram-to-code/generate`
 - `POST /v1/ai/text-to-diagram/chat-streaming`
 

@@ -46,12 +46,12 @@ Success criteria:
 
 ## Phase 3: Compatibility Checks
 
-Status: planned.
+Status: complete.
 
 - [x] Keep `GET /health` available for basic liveness.
-- [ ] Add `GET /v1/ai/capabilities`.
-- [ ] Report supported proxy features, such as text-to-diagram, diagram-to-code, streaming, model names, and Mermaid auto-repair.
-- [ ] Keep the response free of secrets and API keys.
+- [x] Add `GET /v1/ai/capabilities`.
+- [x] Report supported proxy features, such as text-to-diagram, diagram-to-code, streaming, model names, and Mermaid auto-repair.
+- [x] Keep the response free of secrets and API keys.
 
 Success criteria:
 

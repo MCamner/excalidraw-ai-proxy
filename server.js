@@ -6,7 +6,7 @@ import { pathToFileURL } from "url";
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 const port = Number(process.env.PORT || 3016);
 const host = process.env.HOST || "127.0.0.1";
 const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "10mb";
@@ -63,6 +63,10 @@ app.use((req, _res, next) => {
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/v1/ai/capabilities", (_req, res) => {
+  res.json(getCapabilities());
 });
 
 app.post("/v1/ai/diagram-to-code/generate", async (req, res) => {
@@ -247,6 +251,33 @@ function systemPromptFor(prompt) {
   return ARCHITECTURE_HINT.test(prompt || "")
     ? ARCHITECTURE_SYSTEM_PROMPT
     : DEFAULT_SYSTEM_PROMPT;
+}
+
+export function getCapabilities() {
+  return {
+    ok: true,
+    features: {
+      textToDiagram: true,
+      diagramToCode: true,
+      streaming: true,
+      mermaidAutoRepair,
+    },
+    endpoints: {
+      health: "GET /health",
+      capabilities: "GET /v1/ai/capabilities",
+      textToDiagram: "POST /v1/ai/text-to-diagram/chat-streaming",
+      diagramToCode: "POST /v1/ai/diagram-to-code/generate",
+    },
+    models: {
+      textToDiagram: textToDiagramModel,
+      diagramToCode: diagramToCodeModel,
+    },
+    limits: {
+      maxPromptChars,
+      textToDiagramMaxTokens,
+      diagramToCodeMaxTokens,
+    },
+  };
 }
 
 function normalizeMessageContent(content) {
