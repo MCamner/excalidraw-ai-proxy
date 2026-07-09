@@ -227,7 +227,7 @@ const DEFAULT_SYSTEM_PROMPT =
 // Richer instructions for architecture/system requests: group with subgraphs,
 // label the flow, and cap the size so the result stays importable.
 const ARCHITECTURE_SYSTEM_PROMPT =
-  "You generate valid Mermaid source for Excalidraw's Mermaid parser describing a software architecture. Return only Mermaid code, no markdown fences, no explanation. Use flowchart TD. Group related components with subgraph blocks that have descriptive titles. Show data and control flow with labeled edges. Use simple ASCII node IDs like A, B, S1, DB1. Always wrap every node label, subgraph title, and edge label in double quotes, for example S1[\"API Gateway\"], subgraph SVC[\"Services\"], and A -->|\"reads/writes\"| DB1. Do not use classDef, style lines, HTML, JSON, or prose. Keep it to at most 25 nodes.";
+  "You generate valid Mermaid source for Excalidraw's Mermaid parser describing a software architecture. Return only Mermaid code, no markdown fences, no explanation. Use flowchart TD. Group related components with subgraph blocks that have descriptive titles. Show data and control flow with labeled edges. Use simple ASCII node IDs like A, B, S1, DB1. Always wrap every node label, subgraph title, and edge label in double quotes, for example S1[\"API Gateway\"], subgraph SVC[\"Services\"], and A -->|\"reads/writes\"| DB1. Do not use classDef, style lines, bare class statements with raw CSS such as class LEGEND fill:#fff, HTML, JSON, or prose. Do not use reserved words such as end as node IDs. Keep it to at most 25 nodes.";
 
 // Nudges the model toward the architecture prompt when the request looks like a
 // system/architecture ask (Swedish or English). Falls back to the default.
@@ -349,10 +349,26 @@ function sanitizeMermaid(text) {
   // the most common cause of "Generated an invalid diagram". Auto-quote them as
   // a safety net regardless of what the model produced.
   if (/^(flowchart|graph)\b/i.test(mermaid)) {
-    mermaid = mermaid.split("\n").map(quoteFlowchartLabels).join("\n");
+    mermaid = mermaid
+      .split("\n")
+      .filter((line) => !isFlowchartStylingLine(line))
+      .map(quoteFlowchartLabels)
+      .join("\n");
   }
 
   return mermaid;
+}
+
+// The architecture prompt forbids styling, but models occasionally leak a
+// `classDef`, a `style ... fill:` line, or a malformed `class NODE fill:...`
+// statement (a bare `class` must reference a classDef name, not raw CSS).
+// Excalidraw's Mermaid parser rejects all three, so drop them defensively.
+// This runs only in the flowchart/graph branch, so classDiagram bodies
+// (`class Foo {`) — a different grammar — are never touched.
+const FLOWCHART_STYLING_LINE =
+  /^\s*(?:classDef\b|style\s+\S+\s+.*(?:fill|stroke|color)\s*:|class\s+[\w,\s]+\s+(?:fill|stroke|color)\s*:)/i;
+function isFlowchartStylingLine(line) {
+  return FLOWCHART_STYLING_LINE.test(line);
 }
 
 // Characters that carry syntactic meaning in a Mermaid flowchart label and
