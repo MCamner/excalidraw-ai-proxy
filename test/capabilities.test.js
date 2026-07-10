@@ -17,6 +17,7 @@ test("getCapabilities reports supported features without secrets", () => {
     textToDiagram: true,
     diagramToCode: true,
     streaming: true,
+    streamingMode: "buffered-after-repair",
     mermaidAutoRepair: true,
   });
   assert.equal(capabilities.models.textToDiagram, "test-text-model");
@@ -36,6 +37,7 @@ test("GET /v1/ai/capabilities returns capability metadata", async () => {
     assert.equal(body.features.textToDiagram, true);
     assert.equal(body.features.diagramToCode, true);
     assert.equal(body.features.streaming, true);
+    assert.equal(body.features.streamingMode, "buffered-after-repair");
     assert.equal(body.features.mermaidAutoRepair, true);
     assert.equal(JSON.stringify(body).includes("test-secret-key"), false);
   } finally {

@@ -17,7 +17,7 @@ const jsonBodyLimit = process.env.JSON_BODY_LIMIT || "10mb";
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
   process.env.ALLOWED_ORIGIN ||
-  "http://localhost:3000"
+  "http://localhost:3003,http://127.0.0.1:3003"
 )
   .split(",")
   .map((origin) => origin.trim())
@@ -69,8 +69,25 @@ app.use(
 );
 app.use(rateLimit({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests }));
 app.use(express.json({ limit: jsonBodyLimit }));
-app.use((req, _res, next) => {
+app.use((req, res, next) => {
+  const startedAt = process.hrtime.bigint();
   console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  res.on("finish", () => {
+    const latencyMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const repair = res.locals.mermaidRepair;
+    console.info(
+      JSON.stringify({
+        event: "request_completed",
+        endpoint: `${req.method} ${req.path}`,
+        statusCode: res.statusCode,
+        latencyMs: Math.round(latencyMs),
+        repairApplied: Boolean(repair?.repairApplied),
+        autoRepairApplied: Boolean(repair?.autoRepairApplied),
+        repairReasons: repair?.repairReasons || [],
+        errorType: res.statusCode >= 400 ? responseErrorType(res.statusCode) : undefined,
+      }),
+    );
+  });
   next();
 });
 
@@ -148,6 +165,22 @@ function handleError(error, res) {
     message,
     statusCode: status,
   });
+}
+
+function responseErrorType(statusCode) {
+  if (statusCode === 400) {
+    return "bad_request";
+  }
+  if (statusCode === 413) {
+    return "payload_too_large";
+  }
+  if (statusCode === 429) {
+    return "rate_limited";
+  }
+  if (statusCode >= 500) {
+    return "upstream_or_proxy_error";
+  }
+  return "http_error";
 }
 
 function isMainModule() {

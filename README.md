@@ -24,12 +24,29 @@ VITE_APP_AI_BACKEND=http://localhost:3016
 VITE_APP_PORT=3003
 ```
 
+## Config sanity
+
+- Proxy port: `3016`
+- Excalidraw local port: `3003`
+- Default allowed origins: `http://localhost:3003,http://127.0.0.1:3003`
+- API key location: server-side `.env` as `OPENAI_API_KEY`
+
+Use `.env.example` as the source of truth for local runtime settings. Add new runtime settings there when they are added to the proxy.
+
 ## Endpoints
 
 - `GET /health`
 - `GET /v1/ai/capabilities`
 - `POST /v1/ai/diagram-to-code/generate`
 - `POST /v1/ai/text-to-diagram/chat-streaming`
+
+Text-to-diagram uses buffered streaming after repair: the proxy receives streamed model output, buffers it, sanitizes or repairs Mermaid, then sends the final Mermaid back as SSE chunks. Raw model streaming is intentionally not passed directly to Excalidraw because stable diagram import matters more than lower latency.
+
+Repair and request logs record behavior, not prompt bodies. Example:
+
+```json
+{"event":"request_completed","endpoint":"POST /v1/ai/text-to-diagram/chat-streaming","statusCode":200,"repairApplied":true,"repairReasons":["stripped_invalid_class_line"]}
+```
 
 ## Project direction
 

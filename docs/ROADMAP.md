@@ -89,7 +89,7 @@ Success criteria:
 
 ## Phase 5: Endpoint Integration Tests and Config Hardening
 
-Status: next.
+Status: complete.
 
 This phase protects the outer system boundary: the contract between Excalidraw, the proxy HTTP endpoints, mocked OpenAI responses, Mermaid repair, and the final response format.
 
@@ -109,36 +109,36 @@ The goal is not to add new AI features. The goal is to make the existing proxy h
 
 ### 5.1 Align Local Configuration Defaults
 
-- [ ] Align default `ALLOWED_ORIGINS` with the README local Excalidraw port.
-- [ ] Document that `.env.example` is the source of truth for local runtime settings.
-- [ ] Add a short config sanity section to README.
+- [x] Align default `ALLOWED_ORIGINS` with the README local Excalidraw port.
+- [x] Document that `.env.example` is the source of truth for local runtime settings.
+- [x] Add a short config sanity section to README.
 
 ### 5.2 Add HTTP Integration Tests
 
-- [ ] Add integration test coverage for `GET /health`.
+- [x] Add integration test coverage for `GET /health`.
 - [x] Add integration test coverage for `GET /v1/ai/capabilities`.
-- [ ] Add integration test coverage for missing text-to-diagram messages.
-- [ ] Add integration test coverage for over-limit text-to-diagram prompts.
+- [x] Add integration test coverage for missing text-to-diagram messages.
+- [x] Add integration test coverage for over-limit text-to-diagram prompts.
 - [x] Add integration test coverage for missing diagram-to-code image input.
 
 ### 5.3 Add Mocked OpenAI Endpoint Tests
 
 - [x] Test text-to-diagram with a mocked OpenAI stream.
-- [ ] Test text-to-diagram repair behavior through the endpoint.
-- [ ] Test invalid Mermaid after repair.
-- [ ] Test empty OpenAI response handling.
+- [x] Test text-to-diagram repair behavior through the endpoint.
+- [x] Test invalid Mermaid after repair.
+- [x] Test empty OpenAI response handling.
 
 ### 5.4 Clarify Streaming Semantics
 
-- [ ] Document that text-to-diagram uses buffered streaming after repair.
-- [ ] Add `streamingMode` to capabilities output.
-- [ ] Add a README note explaining why raw model streaming is intentionally not passed directly to Excalidraw.
+- [x] Document that text-to-diagram uses buffered streaming after repair.
+- [x] Add `streamingMode` to capabilities output.
+- [x] Add a README note explaining why raw model streaming is intentionally not passed directly to Excalidraw.
 
 ### 5.5 Improve Observability Without Storing Prompts
 
-- [ ] Add request-scoped logging for endpoint, latency, repair status, and error type.
+- [x] Add request-scoped logging for endpoint, latency, repair status, and error type.
 - [x] Keep prompt bodies out of normal logs.
-- [ ] Add one repair-log example to README or WIKI.
+- [x] Add one repair-log example to README or WIKI.
 
 ### 5.6 Keep Test Tooling Minimal
 
@@ -148,14 +148,14 @@ The goal is not to add new AI features. The goal is to make the existing proxy h
 
 Success criteria:
 
-- [ ] `npm test` covers both Mermaid sanitizer behavior and HTTP endpoint behavior.
+- [x] `npm test` covers both Mermaid sanitizer behavior and HTTP endpoint behavior.
 - [x] The proxy can be imported in tests without starting the HTTP listener.
-- [ ] `/health` and `/v1/ai/capabilities` are covered by tests.
+- [x] `/health` and `/v1/ai/capabilities` are covered by tests.
 - [x] Text-to-diagram SSE behavior is covered with mocked OpenAI output.
-- [ ] Invalid or empty model output fails clearly.
-- [ ] Prompt length and missing input errors are tested.
-- [ ] Capabilities describe the actual streaming mode.
-- [ ] README and `.env.example` agree on local ports and origins.
+- [x] Invalid or empty model output fails clearly.
+- [x] Prompt length and missing input errors are tested.
+- [x] Capabilities describe the actual streaming mode.
+- [x] README and `.env.example` agree on local ports and origins.
 - [x] No test requires a real `OPENAI_API_KEY`.
 
 ### Not In Scope For Phase 5

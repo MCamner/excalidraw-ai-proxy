@@ -10,9 +10,23 @@ const config = {
   textToDiagramTemperature: 0.1,
   textToDiagramMaxTokens: 1600,
   diagramToCodeMaxTokens: 4000,
-  maxPromptChars: 6000,
+  maxPromptChars: 20,
   mermaidAutoRepair: true,
 };
+
+test("health route returns ok", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI()));
+
+  try {
+    const response = await fetch(`${server.url}/health`);
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body, { ok: true });
+  } finally {
+    await close(server.instance);
+  }
+});
 
 test("diagram-to-code route rejects requests without an image", async () => {
   const server = await listen(createTestApp(createFakeOpenAI()));
@@ -54,6 +68,44 @@ test("diagram-to-code route returns generated HTML", async () => {
   }
 });
 
+test("text-to-diagram route rejects missing messages", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI()));
+
+  try {
+    const response = await fetch(`${server.url}/v1/ai/text-to-diagram/chat-streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 400);
+    assert.equal(body, "Missing messages");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route rejects over-limit prompts", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI()));
+
+  try {
+    const response = await fetch(`${server.url}/v1/ai/text-to-diagram/chat-streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "this prompt is longer than the configured test limit" }],
+      }),
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 413);
+    assert.equal(body, "Prompt is too long. Max 20 characters.");
+  } finally {
+    await close(server.instance);
+  }
+});
+
 test("text-to-diagram streaming route emits normalized Mermaid SSE", async () => {
   const server = await listen(createTestApp(createFakeOpenAI()));
 
@@ -77,6 +129,75 @@ test("text-to-diagram streaming route emits normalized Mermaid SSE", async () =>
   }
 });
 
+test("text-to-diagram route removes invalid styling through the HTTP path", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI({
+    mermaidChunks: [
+      "flowchart TD\n  A[User prompt] --> LEGEND[Legend]\n",
+      "  class LEGEND fill:#fff,stroke:#000,color:#000",
+    ],
+  })));
+
+  try {
+    const response = await fetch(`${server.url}/v1/ai/text-to-diagram/chat-streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "simple flow" }],
+      }),
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 200);
+    assert.match(body, /LEGEND\[Legend\]/);
+    assert.doesNotMatch(body, /class LEGEND fill/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route rejects empty OpenAI output", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI({ mermaidChunks: [""] })));
+
+  try {
+    const response = await fetch(`${server.url}/v1/ai/text-to-diagram/chat-streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "simple flow" }],
+      }),
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 502);
+    assert.equal(body, "OpenAI returned an empty Mermaid diagram");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route rejects invalid Mermaid after repair", async () => {
+  const server = await listen(createTestApp(createFakeOpenAI({
+    mermaidChunks: ["not mermaid"],
+    repairChunks: ["still invalid"],
+  })));
+
+  try {
+    const response = await fetch(`${server.url}/v1/ai/text-to-diagram/chat-streaming`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: "simple flow" }],
+      }),
+    });
+    const body = await response.text();
+
+    assert.equal(response.status, 502);
+    assert.equal(body, "OpenAI returned invalid Mermaid after repair");
+  } finally {
+    await close(server.instance);
+  }
+});
+
 function createTestApp(openai) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -84,7 +205,9 @@ function createTestApp(openai) {
   return app;
 }
 
-function createFakeOpenAI() {
+function createFakeOpenAI({ mermaidChunks, repairChunks } = {}) {
+  let chatCallCount = 0;
+
   return {
     responses: {
       async create() {
@@ -94,10 +217,13 @@ function createFakeOpenAI() {
     chat: {
       completions: {
         async create() {
-          return [
-            { choices: [{ delta: { content: "flowchart TD\n" } }] },
-            { choices: [{ delta: { content: "  A -- ok --> B" } }] },
-          ];
+          chatCallCount += 1;
+          const chunks = chatCallCount === 1
+            ? mermaidChunks ?? ["flowchart TD\n", "  A -- ok --> B"]
+            : repairChunks ?? mermaidChunks ?? ["flowchart TD\n", "  A -- ok --> B"];
+          return chunks.map((content) => ({
+            choices: [{ delta: { content } }],
+          }));
         },
       },
     },
