@@ -167,6 +167,24 @@ Success criteria:
 - [ ] Do not optimize for lower latency before endpoint correctness is tested.
 - [ ] Do not change model defaults unless tests prove the current model path is unstable.
 
+## Phase 6: CI and Release Confidence
+
+Status: complete.
+
+This phase makes the local confidence command run automatically before changes are merged.
+
+- [x] Add GitHub Actions workflow for push and pull request checks.
+- [x] Use `npm ci` so CI installs from `package-lock.json`.
+- [x] Run `npm test` in CI.
+- [x] Document `npm test` as the local and CI confidence command.
+- [x] Add CI status badge to README.
+
+Success criteria:
+
+- [x] CI uses the same test command as local development.
+- [x] CI does not require a real `OPENAI_API_KEY`.
+- [x] Runtime dependencies remain unchanged.
+
 ## Not Now
 
 - Do not add more AI endpoints before the current contracts are tested.

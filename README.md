@@ -1,5 +1,7 @@
 # Excalidraw AI Proxy
 
+[![CI](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml)
+
 Small server-side proxy for Excalidraw OSS AI features. The browser only sees this server; `OPENAI_API_KEY` stays in `.env` on the server.
 
 ## Setup
@@ -52,6 +54,14 @@ Repair and request logs record behavior, not prompt bodies. Example:
 
 - [AI output contract](docs/AI_CONTRACT.md)
 - [Roadmap](docs/ROADMAP.md)
+
+## Tests
+
+```bash
+npm test
+```
+
+CI runs the same command on pushes and pull requests to `main`.
 
 ## Settings
 
