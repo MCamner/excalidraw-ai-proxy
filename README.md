@@ -4,6 +4,11 @@
 
 Small server-side proxy for Excalidraw OSS AI features. The browser only sees this server; `OPENAI_API_KEY` stays in `.env` on the server.
 
+- [Quick start](QUICKSTART.md)
+- [Installation](INSTALL.md)
+- [Security policy](SECURITY.md)
+- [MIT license](LICENSE)
+
 ## Setup
 
 Clone this repository, then create your local server configuration:
