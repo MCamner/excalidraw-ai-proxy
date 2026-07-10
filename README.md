@@ -11,6 +11,12 @@ It implements Excalidraw-compatible text-to-diagram and diagram-to-code
 endpoints, repairs common Mermaid failures, and keeps model access and secrets
 on the server.
 
+> [!IMPORTANT]
+> This repository is the AI backend proxy, not the Excalidraw editor. To use
+> the AI features in the UI, install a local checkout of
+> [Excalidraw OSS](https://github.com/excalidraw/excalidraw) and connect it to
+> this proxy.
+
 ## Why use it?
 
 - **Keep secrets server-side.** Excalidraw only connects to the proxy; the
@@ -51,6 +57,16 @@ SSE chunks. See [examples](docs/EXAMPLES.md) for request and response shapes.
 Requirements: Node.js 20 or later, npm, an OpenAI API key, and a local
 Excalidraw OSS checkout.
 
+Clone and install Excalidraw OSS in a separate directory:
+
+```bash
+git clone https://github.com/excalidraw/excalidraw.git
+cd excalidraw
+yarn
+```
+
+Then clone and install the proxy:
+
 ```bash
 git clone https://github.com/MCamner/excalidraw-ai-proxy.git
 cd excalidraw-ai-proxy
@@ -77,7 +93,13 @@ VITE_APP_AI_BACKEND=http://localhost:3016
 VITE_APP_PORT=3003
 ```
 
-Then start Excalidraw from that checkout. The default local addresses are:
+Then start Excalidraw from that checkout:
+
+```bash
+yarn start
+```
+
+The default local addresses are:
 
 - proxy: `http://localhost:3016`
 - Excalidraw: `http://localhost:3003`
@@ -162,3 +184,12 @@ Actions runs the same command for pushes and pull requests to `main`.
 ## License
 
 Released under the [MIT License](LICENSE).
+
+## Acknowledgements
+
+Built for compatibility with
+[Excalidraw OSS](https://github.com/excalidraw/excalidraw).
+
+Thanks to the Excalidraw maintainers and contributors for the open-source
+editor and its AI integration surface. This project is independent and is not
+affiliated with or endorsed by Excalidraw.

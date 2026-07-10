@@ -4,8 +4,27 @@
 
 - Node.js 20 or later
 - npm
+- Yarn 1.x for Excalidraw OSS
 - an OpenAI API key
 - a local Excalidraw OSS checkout
+
+This project provides the AI backend only. The editor UI comes from
+[Excalidraw OSS](https://github.com/excalidraw/excalidraw), which must be
+installed separately.
+
+## Install Excalidraw OSS
+
+Choose a directory outside this proxy repository, then clone and install
+Excalidraw:
+
+```bash
+git clone https://github.com/excalidraw/excalidraw.git
+cd excalidraw
+yarn
+```
+
+Keep this checkout available; you will configure and start it after the proxy
+is running.
 
 ## Install the proxy
 
@@ -49,11 +68,9 @@ VITE_APP_AI_BACKEND=http://localhost:3016
 VITE_APP_PORT=3003
 ```
 
-Install and start Excalidraw using the package manager required by that
-checkout. For a Yarn-based checkout:
+Start Excalidraw from that checkout:
 
 ```bash
-yarn
 yarn start
 ```
 
