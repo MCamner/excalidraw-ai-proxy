@@ -87,6 +87,86 @@ Success criteria:
 - Route handling can be tested separately through `lib/excalidraw-routes.js`.
 - Refactors preserve the existing endpoints and local dev command.
 
+## Phase 5: Endpoint Integration Tests and Config Hardening
+
+Status: next.
+
+This phase protects the outer system boundary: the contract between Excalidraw, the proxy HTTP endpoints, mocked OpenAI responses, Mermaid repair, and the final response format.
+
+The inner loop is now covered by sanitizer tests:
+
+```text
+LLM output -> Mermaid error -> sanitizer fix -> regression test
+```
+
+Phase 5 covers the outer loop:
+
+```text
+Excalidraw request -> proxy endpoint -> OpenAI/mock -> repair -> HTTP/SSE response
+```
+
+The goal is not to add new AI features. The goal is to make the existing proxy harder to break.
+
+### 5.1 Align Local Configuration Defaults
+
+- [ ] Align default `ALLOWED_ORIGINS` with the README local Excalidraw port.
+- [ ] Document that `.env.example` is the source of truth for local runtime settings.
+- [ ] Add a short config sanity section to README.
+
+### 5.2 Add HTTP Integration Tests
+
+- [ ] Add integration test coverage for `GET /health`.
+- [x] Add integration test coverage for `GET /v1/ai/capabilities`.
+- [ ] Add integration test coverage for missing text-to-diagram messages.
+- [ ] Add integration test coverage for over-limit text-to-diagram prompts.
+- [x] Add integration test coverage for missing diagram-to-code image input.
+
+### 5.3 Add Mocked OpenAI Endpoint Tests
+
+- [x] Test text-to-diagram with a mocked OpenAI stream.
+- [ ] Test text-to-diagram repair behavior through the endpoint.
+- [ ] Test invalid Mermaid after repair.
+- [ ] Test empty OpenAI response handling.
+
+### 5.4 Clarify Streaming Semantics
+
+- [ ] Document that text-to-diagram uses buffered streaming after repair.
+- [ ] Add `streamingMode` to capabilities output.
+- [ ] Add a README note explaining why raw model streaming is intentionally not passed directly to Excalidraw.
+
+### 5.5 Improve Observability Without Storing Prompts
+
+- [ ] Add request-scoped logging for endpoint, latency, repair status, and error type.
+- [x] Keep prompt bodies out of normal logs.
+- [ ] Add one repair-log example to README or WIKI.
+
+### 5.6 Keep Test Tooling Minimal
+
+- [x] Decide whether to use `supertest` or native Node HTTP tests.
+- [x] Add any new test dependency as `devDependency`, not `dependency`.
+- [x] Keep `npm test` as the single confidence command.
+
+Success criteria:
+
+- [ ] `npm test` covers both Mermaid sanitizer behavior and HTTP endpoint behavior.
+- [x] The proxy can be imported in tests without starting the HTTP listener.
+- [ ] `/health` and `/v1/ai/capabilities` are covered by tests.
+- [x] Text-to-diagram SSE behavior is covered with mocked OpenAI output.
+- [ ] Invalid or empty model output fails clearly.
+- [ ] Prompt length and missing input errors are tested.
+- [ ] Capabilities describe the actual streaming mode.
+- [ ] README and `.env.example` agree on local ports and origins.
+- [x] No test requires a real `OPENAI_API_KEY`.
+
+### Not In Scope For Phase 5
+
+- [ ] Do not add new AI endpoints.
+- [ ] Do not expose the proxy publicly.
+- [ ] Do not add authentication yet.
+- [ ] Do not add persistent prompt logging.
+- [ ] Do not optimize for lower latency before endpoint correctness is tested.
+- [ ] Do not change model defaults unless tests prove the current model path is unstable.
+
 ## Not Now
 
 - Do not add more AI endpoints before the current contracts are tested.
