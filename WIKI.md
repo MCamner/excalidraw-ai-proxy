@@ -1,49 +1,36 @@
 # Excalidraw AI Proxy Wiki
 
-This repo is a minimal Node.js proxy for Excalidraw AI functionality. It separates client-side UI from server-side OpenAI access so the API key remains secure.
+This repository provides a local Node.js proxy for Excalidraw OSS AI features.
+It keeps OpenAI access and credentials outside the browser while preserving
+the endpoint shapes expected by Excalidraw.
 
-## Purpose
+## Start here
 
-- Proxy AI requests from Excalidraw to OpenAI.
-- Keep the browser unaware of the API key.
-- Offer a simple local dev experience with `npm run dev`.
+- [Quick start](QUICKSTART.md)
+- [Full installation guide](INSTALL.md)
+- [API examples](docs/EXAMPLES.md)
+- [AI output contract](docs/AI_CONTRACT.md)
+- [Architecture](docs/repo-diagram.md)
+- [Roadmap](docs/ROADMAP.md)
 
-## Files
-
-- `server.js` — main Express proxy server.
-- `package.json` — dependencies and scripts.
-- `.env.example` — example environment configuration.
-- `SKILL.md` — workspace skill for creating reusable `SKILL.md` files.
-- `assistant-instructions.md` — generic assistant workspace guidance.
-- `copilot-instructions.md` — Copilot-specific workspace guidance.
-- `claude-instructions.md` — Claude-specific workspace guidance.
-- `codex-instructions.md` — Codex-specific workspace guidance.
-
-## Endpoints
+## Supported endpoints
 
 - `GET /health`
 - `GET /v1/ai/capabilities`
 - `POST /v1/ai/diagram-to-code/generate`
 - `POST /v1/ai/text-to-diagram/chat-streaming`
 
-## Local setup
+## Local defaults
 
-```bash
-cp .env.example .env
-npm install
-npm run dev
-```
+- proxy: `http://localhost:3016`
+- Excalidraw: `http://localhost:3003`
+- allowed origins: `http://localhost:3003,http://127.0.0.1:3003`
 
-Then run Excalidraw from `/Users/mansys/excalidraw` with:
+Paths to the proxy and Excalidraw checkouts are machine-specific. Keep `.env`
+out of version control and keep `OPENAI_API_KEY` in the proxy configuration
+only.
 
-```bash
-yarn
-yarn start
-```
+## Maintenance rule
 
-## Notes
-
-- Keep `.env` out of version control.
-- Document any new endpoints or `.env` settings in `README.md`.
-- Use `docs/AI_CONTRACT.md` and `docs/ROADMAP.md` to keep Mermaid sanitizer work testable.
-- Use the workspace instruction files to keep AI-generated changes aligned with repo expectations.
+When an endpoint or environment setting changes, update `.env.example`, the
+README documentation table, and the relevant test in the same pull request.
