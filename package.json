@@ -1,7 +1,20 @@
 {
   "name": "excalidraw-ai-proxy",
   "version": "0.1.0",
+  "description": "Local server-side proxy for Excalidraw OSS AI features.",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MCamner/excalidraw-ai-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MCamner/excalidraw-ai-proxy/issues"
+  },
+  "homepage": "https://github.com/MCamner/excalidraw-ai-proxy#readme",
+  "engines": {
+    "node": ">=20"
+  },
   "type": "module",
   "scripts": {
     "start": "node server.js",
