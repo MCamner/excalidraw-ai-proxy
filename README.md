@@ -4,7 +4,14 @@
 
 Small server-side proxy for Excalidraw OSS AI features. The browser only sees this server; `OPENAI_API_KEY` stays in `.env` on the server.
 
+- [Quick start](QUICKSTART.md)
+- [Installation](INSTALL.md)
+- [Security policy](SECURITY.md)
+- [MIT license](LICENSE)
+
 ## Setup
+
+Clone this repository, then create your local server configuration:
 
 ```bash
 cp .env.example .env
@@ -12,19 +19,34 @@ npm install
 npm run dev
 ```
 
-Then run Excalidraw from `/Users/mansys/excalidraw`:
+Replace the placeholder `OPENAI_API_KEY` in `.env` with your own key. Keep this
+file server-side and do not add it to your Excalidraw configuration.
+
+Then configure your local Excalidraw OSS checkout. In its `.env.local`, set:
+
+```env
+VITE_APP_AI_BACKEND=http://localhost:3016
+VITE_APP_PORT=3003
+```
+
+Start Excalidraw from that checkout:
 
 ```bash
 yarn
 yarn start
 ```
 
-Excalidraw reads `/Users/mansys/excalidraw/.env.local`:
+Your checkout path may be different. If you change either port, update the
+backend URL and `ALLOWED_ORIGINS` so they continue to match.
 
-```env
-VITE_APP_AI_BACKEND=http://localhost:3016
-VITE_APP_PORT=3003
-```
+## My local development setup
+
+This project was developed with:
+
+- the proxy on `http://localhost:3016`
+- Excalidraw OSS on `http://localhost:3003`
+
+These are the documented defaults; your local paths may be different.
 
 ## Config sanity
 
