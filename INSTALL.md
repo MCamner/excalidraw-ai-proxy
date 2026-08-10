@@ -36,6 +36,28 @@ cd excalidraw-ai-proxy
 npm install
 ```
 
+### Alternative: install via GitHub Packages
+
+The proxy is also published as `@mcamner/excalidraw-ai-proxy` on GitHub Packages. This gives you the same server code as the git clone above, so it is mainly useful for pulling a specific released version without cloning the repository.
+
+GitHub Packages requires authentication even for public packages:
+
+1. Create a GitHub personal access token with the `read:packages` scope (Settings > Developer settings > Personal access tokens).
+2. Add the following to your `~/.npmrc` (or a project-local `.npmrc`), replacing `YOUR_TOKEN` with the token you created:
+
+   ```
+   @mcamner:registry=https://npm.pkg.github.com
+   //npm.pkg.github.com/:_authToken=YOUR_TOKEN
+   ```
+
+3. Install the package:
+
+   ```bash
+   npm install @mcamner/excalidraw-ai-proxy
+   ```
+
+The package is installed into `node_modules/@mcamner/excalidraw-ai-proxy`. You still need to create a `.env` file and start the server from that folder, so cloning the repository directly (above) is usually simpler for local development.
+
 Create your local configuration:
 
 ```bash
