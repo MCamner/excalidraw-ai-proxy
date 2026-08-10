@@ -3,6 +3,7 @@
 [![CI](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/MCamner/excalidraw-ai-proxy)](https://github.com/MCamner/excalidraw-ai-proxy/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm package](https://img.shields.io/badge/package-%40mcamner%2Fexcalidraw--ai--proxy-blue)](https://github.com/MCamner/excalidraw-ai-proxy/pkgs/npm/excalidraw-ai-proxy)
 
 A local Node.js proxy that enables Excalidraw OSS AI features without exposing
 your OpenAI API key to the browser.
