@@ -27,7 +27,9 @@ commit `.env`, keys, prompts containing sensitive data, or generated secrets.
 
 For Mermaid fixes, add the failing input as a small fixture under
 `test/fixtures/mermaid/` and a regression test that documents the expected
-normalization.
+normalization. Also add the repair pattern to the "Current repaired patterns"
+list in [docs/AI_CONTRACT.md](docs/AI_CONTRACT.md). The full workflow is written
+up in `.claude/skills/mermaid-repair/SKILL.md`.
 
 ## Versioning and distribution
 
