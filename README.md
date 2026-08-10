@@ -7,8 +7,7 @@
 A local Node.js proxy that enables Excalidraw OSS AI features without exposing
 your OpenAI API key to the browser.
 
-This repository is distributed as source through GitHub releases. It is not an
-npm package; `"private": true` intentionally prevents accidental publication.
+This repository is distributed as source through GitHub releases and is also published as the `@mcamner/excalidraw-ai-proxy` npm package on GitHub Packages.
 
 It implements Excalidraw-compatible text-to-diagram and diagram-to-code
 endpoints, repairs common Mermaid failures, and keeps model access and secrets
