@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import { sanitizeMermaid, sanitizeMermaidWithReport } from "../lib/mermaid-sanitize.js";
+import {
+  isValidMermaid,
+  sanitizeMermaid,
+  sanitizeMermaidWithReport,
+} from "../lib/mermaid-sanitize.js";
 
 const cases = [
   {
@@ -81,6 +85,11 @@ for (const testCase of cases) {
     assert.ok(report.repairReasons.includes(testCase.repairPattern));
   });
 }
+
+test("isValidMermaid uses Mermaid syntax parsing", async () => {
+  assert.equal(await isValidMermaid("flowchart TD\n  A --> B"), true);
+  assert.equal(await isValidMermaid("flowchart TD\n  A -->|unterminated B"), false);
+});
 
 function readFixture(name) {
   return readFile(`test/fixtures/mermaid/${name}`, "utf8");
