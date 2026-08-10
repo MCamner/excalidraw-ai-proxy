@@ -29,6 +29,12 @@ For Mermaid fixes, add the failing input as a small fixture under
 `test/fixtures/mermaid/` and a regression test that documents the expected
 normalization.
 
+## Versioning and distribution
+
+This project follows semantic versioning. Update the version in `package.json`
+only as part of a tagged GitHub release. The proxy is installed from source and
+is intentionally marked private so it cannot be published to npm accidentally.
+
 ## Pull requests
 
 Keep pull requests small and explain why the change is needed. Include the

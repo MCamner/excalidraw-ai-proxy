@@ -3,6 +3,11 @@ import dotenv from "dotenv";
 import express from "express";
 import { pathToFileURL } from "url";
 import { buildCapabilities, registerExcalidrawRoutes } from "./lib/excalidraw-routes.js";
+import {
+  createCorsOptions,
+  createRateLimiter,
+  handleHttpError,
+} from "./lib/http-middleware.js";
 import { sanitizeMermaid, sanitizeMermaidWithReport } from "./lib/mermaid-sanitize.js";
 import { createOpenAIClient } from "./lib/openai-client.js";
 
@@ -54,20 +59,8 @@ const openai = createOpenAIClient({
   maxRetries: openaiMaxRetries,
 });
 
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`Origin not allowed by CORS: ${origin}`));
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept"],
-  }),
-);
-app.use(rateLimit({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests }));
+app.use(cors(createCorsOptions(allowedOrigins)));
+app.use(createRateLimiter({ windowMs: rateLimitWindowMs, maxRequests: rateLimitMaxRequests }));
 app.use(express.json({ limit: jsonBodyLimit }));
 app.use((req, res, next) => {
   const startedAt = process.hrtime.bigint();
@@ -97,7 +90,7 @@ registerExcalidrawRoutes(app, {
 });
 
 app.use((err, _req, res, _next) => {
-  handleError(err, res);
+  handleHttpError(err, res);
 });
 
 if (isMainModule()) {
@@ -111,39 +104,6 @@ export function getCapabilities() {
   return buildCapabilities(routeConfig);
 }
 
-function rateLimit({ windowMs, maxRequests }) {
-  const buckets = new Map();
-
-  return (req, res, next) => {
-    const now = Date.now();
-    const key = req.ip || req.socket.remoteAddress || "local";
-    const bucket = buckets.get(key);
-
-    if (!bucket || now >= bucket.resetAt) {
-      buckets.set(key, {
-        count: 1,
-        resetAt: now + windowMs,
-      });
-      next();
-      return;
-    }
-
-    bucket.count += 1;
-
-    if (bucket.count > maxRequests) {
-      const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
-      res.set("Retry-After", String(retryAfterSeconds));
-      res.status(429).json({
-        message: "Too many requests",
-        retryAfterSeconds,
-      });
-      return;
-    }
-
-    next();
-  };
-}
-
 function numberFromEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -155,16 +115,6 @@ function booleanFromEnv(name, fallback) {
     return fallback;
   }
   return /^(1|true|yes|on)$/i.test(value);
-}
-
-function handleError(error, res) {
-  const status = error?.status || error?.statusCode || 500;
-  const message = error instanceof Error ? error.message : "Unexpected server error";
-
-  res.status(status).json({
-    message,
-    statusCode: status,
-  });
 }
 
 function responseErrorType(statusCode) {
