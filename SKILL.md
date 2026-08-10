@@ -1,8 +1,6 @@
 ---
-name: create-skill
+name: excalidraw-ai-proxy
 description: "Guide the user through creating a reusable SKILL.md file for this workspace."
-argument-hint: "Describe the workflow or outcome the new skill should produce."
-disable-model-invocation: true
 ---
 
 Use this skill when the user wants a new `SKILL.md` file for the current repository. It should help capture a real workflow, turn it into a reusable workspace skill, and save the resulting customization in the repo.
