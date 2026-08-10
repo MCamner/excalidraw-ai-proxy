@@ -15,7 +15,7 @@ checkout of [Excalidraw OSS](https://github.com/excalidraw/excalidraw).
 | `lib/excalidraw-routes.js` | Endpoint handlers, SSE streaming, model-assisted repair |
 | `lib/mermaid-sanitize.js` | Deterministic Mermaid repair pipeline |
 | `lib/mermaid-parser.js` | Real Mermaid parser behind jsdom, used by `isValidMermaid` |
-| `lib/prompt-contracts.js` | System prompts that constrain model output |
+| `lib/prompt-contracts.js` | Two system prompts (default/architecture) and the routing between them |
 | `lib/http-middleware.js` | CORS options, rate limiter, error handler |
 | `test/` | `node --test` suite with mocked OpenAI clients |
 | `docs/AI_CONTRACT.md` | What the model may emit and which repairs exist |

@@ -55,6 +55,30 @@ The text-to-diagram endpoint buffers the model stream, removes incompatible
 Mermaid syntax, optionally repairs invalid output, and then returns normalized
 SSE chunks. See [examples](docs/EXAMPLES.md) for request and response shapes.
 
+Buffering also makes the endpoint tolerant of a truncated upstream stream: if
+the OpenAI connection closes prematurely *after* content has arrived, the proxy
+normalizes what it received instead of failing the request. A premature close
+with no content is still an error.
+
+## Prompt contracts
+
+Text-to-diagram uses one of two system prompts. The **default** contract asks
+for a plain flowchart. The **architecture** contract additionally requires
+`subgraph` grouping, quotes every label, and caps the diagram at 25 nodes.
+
+The proxy selects the contract per request. Send `"mode": "architecture"` or
+`"mode": "default"` in the request body to choose explicitly; otherwise a
+bilingual Swedish/English heuristic inspects the prompt. Terms like
+`arkitektur`, `architecture`, `microservice`, or `component diagram` select the
+architecture contract on their own, while weaker terms like `component` or
+`data flow` only do so alongside architecture context — `show the system
+components` routes to architecture, `show the components of a form` does not.
+
+Because the architecture contract is more constrained, use an explicit `mode`
+when the choice matters. Available modes are listed in
+`GET /v1/ai/capabilities` under `features.promptContractModes`. See the
+[AI output contract](docs/AI_CONTRACT.md) for both contracts in full.
+
 ## Quick start
 
 Requirements: Node.js 20 or later, npm, an OpenAI API key, and a local
@@ -150,14 +174,23 @@ are:
 | `PORT` | `3016` | Proxy port |
 | `HOST` | `127.0.0.1` | Bind address |
 | `ALLOWED_ORIGINS` | localhost on port `3003` | Browser origins allowed by CORS |
-| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `gpt-4.1-mini` | Text-to-diagram model |
-| `OPENAI_DIAGRAM_TO_CODE_MODEL` | `gpt-4.1-mini` | Diagram-to-code model |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | Fallback model for both tasks |
+| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `OPENAI_MODEL` | Text-to-diagram model |
+| `OPENAI_DIAGRAM_TO_CODE_MODEL` | `OPENAI_MODEL` | Diagram-to-code model |
 | `MERMAID_AUTO_REPAIR` | `true` | Enable model-assisted repair fallback |
 | `MAX_PROMPT_CHARS` | `6000` | Maximum text prompt length |
 | `RATE_LIMIT_MAX_REQUESTS` | `20` | Requests allowed per rate-limit window |
 
 For higher-quality diagram-to-code output, use a stronger multimodal model for
 `OPENAI_DIAGRAM_TO_CODE_MODEL` while keeping text-to-diagram on a faster model.
+
+The two endpoints call different OpenAI APIs, so the models are not
+interchangeable:
+
+| Setting | OpenAI API | Model must support |
+| --- | --- | --- |
+| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | Chat Completions | streaming |
+| `OPENAI_DIAGRAM_TO_CODE_MODEL` | Responses | image input |
 
 ## Documentation
 

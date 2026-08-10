@@ -65,6 +65,38 @@ test("rate limiter returns 429 and removes expired client buckets", async () => 
   }
 });
 
+test("429 responses carry the retry delay in both the header and the body", async () => {
+  let currentTime = 0;
+  const limiter = createRateLimiter({
+    windowMs: 60_000,
+    maxRequests: 1,
+    now: () => currentTime,
+  });
+  const app = express();
+  app.set("trust proxy", true);
+  app.use(limiter);
+  app.get("/health", (_req, res) => res.json({ ok: true }));
+  const server = await listen(app);
+
+  try {
+    await fetch(`${server.url}/health`, { headers: { "X-Forwarded-For": "192.0.2.3" } });
+
+    currentTime = 15_000;
+    const limited = await fetch(`${server.url}/health`, {
+      headers: { "X-Forwarded-For": "192.0.2.3" },
+    });
+
+    assert.equal(limited.status, 429);
+    assert.equal(limited.headers.get("retry-after"), "45");
+    assert.deepEqual(await limited.json(), {
+      message: "Too many requests",
+      retryAfterSeconds: 45,
+    });
+  } finally {
+    await close(server.instance);
+  }
+});
+
 test("HTTP errors do not expose upstream messages", () => {
   let responseBody;
   const response = {

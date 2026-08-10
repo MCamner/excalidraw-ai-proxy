@@ -198,6 +198,147 @@ test("text-to-diagram route rejects invalid Mermaid after repair", async () => {
   }
 });
 
+test("text-to-diagram route selects the prompt contract from the prompt", async () => {
+  const openai = createFakeOpenAI();
+  const server = await listen(createTestApp(openai));
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "visa arkitekturen" }] });
+
+    assert.match(systemPromptOf(openai.chatCalls[0]), /describing a software architecture/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route honours an explicit mode over the prompt heuristic", async () => {
+  const architectureByMode = createFakeOpenAI();
+  const defaultByMode = createFakeOpenAI();
+  const first = await listen(createTestApp(architectureByMode));
+  const second = await listen(createTestApp(defaultByMode));
+
+  try {
+    await postPrompt(first.url, {
+      messages: [{ role: "user", content: "a login flow" }],
+      mode: "architecture",
+    });
+    await postPrompt(second.url, {
+      messages: [{ role: "user", content: "visa arkitekturen" }],
+      mode: "default",
+    });
+
+    assert.match(
+      systemPromptOf(architectureByMode.chatCalls[0]),
+      /describing a software architecture/,
+    );
+    assert.doesNotMatch(
+      systemPromptOf(defaultByMode.chatCalls[0]),
+      /describing a software architecture/,
+    );
+  } finally {
+    await close(first.instance);
+    await close(second.instance);
+  }
+});
+
+test("text-to-diagram route reads the last user message, flattening array content", async () => {
+  const openai = createFakeOpenAI();
+  const server = await listen(createTestApp(openai));
+
+  try {
+    await postPrompt(server.url, {
+      messages: [
+        { role: "user", content: "stale prompt" },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "boxes" },
+            { type: "text", text: "arrows" },
+          ],
+        },
+        { role: "assistant", content: "sure" },
+      ],
+    });
+
+    assert.equal(userPromptOf(openai.chatCalls[0]), "boxes\narrows");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route keeps buffered Mermaid when the stream closes prematurely", async () => {
+  const server = await listen(createTestApp(createTruncatedStreamOpenAI({
+    chunks: ["flowchart TD\n", "  A -- ok --> B"],
+  })));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.match(response.body, /flowchart TD/);
+    assert.match(response.body, /A -->\|ok\| B/);
+    assert.match(response.body, /data: \[DONE\]/);
+    assert.equal(response.status, 200);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route fails when the stream closes before any content", async () => {
+  const server = await listen(createTestApp(createTruncatedStreamOpenAI({ chunks: [] })));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.equal(response.status, 500);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+function createTruncatedStreamOpenAI({ chunks }) {
+  return {
+    responses: {
+      async create() {
+        return { output_text: "<main>ok</main>" };
+      },
+    },
+    chat: {
+      completions: {
+        async create() {
+          return (async function* stream() {
+            for (const content of chunks) {
+              yield { choices: [{ delta: { content } }] };
+            }
+            throw new Error("Premature close");
+          })();
+        },
+      },
+    },
+  };
+}
+
+async function postPrompt(url, body) {
+  const response = await fetch(`${url}/v1/ai/text-to-diagram/chat-streaming`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  return { status: response.status, body: await response.text() };
+}
+
+function systemPromptOf(call) {
+  return call.messages.find((message) => message.role === "system").content;
+}
+
+function userPromptOf(call) {
+  return call.messages.find((message) => message.role === "user").content;
+}
+
 function createTestApp(openai) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -207,8 +348,10 @@ function createTestApp(openai) {
 
 function createFakeOpenAI({ mermaidChunks, repairChunks } = {}) {
   let chatCallCount = 0;
+  const chatCalls = [];
 
   return {
+    chatCalls,
     responses: {
       async create() {
         return { output_text: " <main>ok</main> " };
@@ -216,7 +359,8 @@ function createFakeOpenAI({ mermaidChunks, repairChunks } = {}) {
     },
     chat: {
       completions: {
-        async create() {
+        async create(params) {
+          chatCalls.push(params);
           chatCallCount += 1;
           const chunks = chatCallCount === 1
             ? mermaidChunks ?? ["flowchart TD\n", "  A -- ok --> B"]

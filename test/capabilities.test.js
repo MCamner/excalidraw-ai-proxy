@@ -19,6 +19,7 @@ test("getCapabilities reports supported features without secrets", () => {
     streaming: true,
     streamingMode: "buffered-after-repair",
     mermaidAutoRepair: true,
+    promptContractModes: ["default", "architecture"],
   });
   assert.equal(capabilities.models.textToDiagram, "test-text-model");
   assert.equal(capabilities.models.diagramToCode, "test-code-model");
@@ -39,6 +40,7 @@ test("GET /v1/ai/capabilities returns capability metadata", async () => {
     assert.equal(body.features.streaming, true);
     assert.equal(body.features.streamingMode, "buffered-after-repair");
     assert.equal(body.features.mermaidAutoRepair, true);
+    assert.deepEqual(body.features.promptContractModes, ["default", "architecture"]);
     assert.equal(JSON.stringify(body).includes("test-secret-key"), false);
   } finally {
     await close(server.instance);
