@@ -185,6 +185,55 @@ Success criteria:
 - [x] CI does not require a real `OPENAI_API_KEY`.
 - [x] Runtime dependencies remain unchanged.
 
+## Phase 7: Diagram-Aware Retry
+
+Status: complete.
+
+The sanitizer fixes what is deterministically fixable. Everything else used to
+get one generic "repair this" pass, which is a weak signal for the model and
+gives the logs nothing to aggregate. Phase 7 classifies the failure first and
+retries against that specific error.
+
+- [x] Add `lib/mermaid-diagnostics.js` with a fixed vocabulary of failure types.
+- [x] Classify parser failures: unbalanced subgraph, `end` as node ID, invalid
+      node ID, unquoted label, unknown diagram type, other syntax errors.
+- [x] Classify importable-but-flawed output: unsupported diagram type for the
+      Excalidraw importer, node count above the budget.
+- [x] Treat a flowchart header with no nodes as an empty diagram.
+- [x] Add `lib/mermaid-repair.js` with one targeted instruction per failure type.
+- [x] Reclassify between attempts and cap the loop at two model repairs.
+- [x] Keep the best candidate so a retry cannot make the response worse.
+- [x] Serve soft failures, fail hard failures with `502`.
+- [x] Log failure type, severity, node count, and attempt outcome only.
+- [x] Report the limits in `GET /v1/ai/capabilities`.
+
+Success criteria:
+
+- [x] Each failure class has a fixture and a diagnostics test.
+- [x] The repair prompt contains the classified error, proven by test.
+- [x] Prompts and diagram source stay out of the logs.
+- [x] `npm test` covers the retry loop and the endpoint behavior.
+
+## Phase 8: Provider-Neutral Model Routing
+
+Status: not started.
+
+A thin model registry above the OpenAI client, describing `supports_json`,
+`supports_streaming`, `max_output`, `diagram_quality_tier`, and `cost_tier`, so
+the proxy can pick a model per task: a cheap model for a simple flowchart, a
+stronger one for architecture, a small strict one for the repair pass.
+
+Constraints if this is picked up:
+
+- The API key stays server-side. No provider lock-in, and no provider SDK
+  leaking into the route handlers.
+- Routing decisions belong next to the prompt contracts, not inside the
+  endpoints.
+- This stays a proxy. It does not become an AI platform.
+
+Phase 7 comes first on purpose: routing between models is only worth doing once
+the quality pipeline it feeds is stable and measurable.
+
 ## Not Now
 
 - Do not add more AI endpoints before the current contracts are tested.

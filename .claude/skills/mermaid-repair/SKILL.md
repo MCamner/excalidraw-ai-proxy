@@ -116,8 +116,8 @@ Consequences to respect:
   inside `quoteFlowchartLabels` usually is not.
 
 Keep the rule deterministic. The model-assisted fallback (`openai_auto_repair`)
-is a separate path in `lib/excalidraw-routes.js` and is not what you are editing
-here.
+is a separate path in `lib/mermaid-repair.js`, driven by the failure classes in
+`lib/mermaid-diagnostics.js`, and is not what you are editing here.
 
 ### 5. Document
 
@@ -174,3 +174,10 @@ deterministic rule can generalize — the correct fix is the prompt contract in
 `lib/prompt-contracts.js` plus the `openai_auto_repair` fallback, not a new
 sanitizer rule. A sanitizer rule is only worth adding when the broken pattern is
 **recurring and syntactically identifiable**.
+
+If the failure *is* identifiable but not fixable by deleting or rewriting lines
+— it needs the model to restructure the diagram — it belongs in the failure
+classification instead: a type in `lib/mermaid-diagnostics.js`, an instruction in
+`REPAIR_INSTRUCTIONS` in `lib/mermaid-repair.js`, a fixture and case in
+`test/mermaid-diagnostics.test.js`, and a row in the failure table in
+`docs/AI_CONTRACT.md`.

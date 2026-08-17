@@ -55,6 +55,15 @@ The text-to-diagram endpoint buffers the model stream, removes incompatible
 Mermaid syntax, optionally repairs invalid output, and then returns normalized
 SSE chunks. See [examples](docs/EXAMPLES.md) for request and response shapes.
 
+When the sanitized output still does not parse, the proxy classifies *why* —
+unbalanced subgraph, `end` used as a node ID, a node ID with a space, an
+unquoted label, a diagram type Excalidraw cannot import, too many nodes — and
+sends that specific error back to the model as a targeted repair instruction
+instead of a generic retry. It keeps the best candidate it has seen, so a retry
+can never make the response worse than the first attempt. See the
+[AI output contract](docs/AI_CONTRACT.md) for the failure classes and their
+severity.
+
 Buffering also makes the endpoint tolerant of a truncated upstream stream: if
 the OpenAI connection closes prematurely *after* content has arrived, the proxy
 normalizes what it received instead of failing the request. A premature close
@@ -178,6 +187,8 @@ are:
 | `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `OPENAI_MODEL` | Text-to-diagram model |
 | `OPENAI_DIAGRAM_TO_CODE_MODEL` | `OPENAI_MODEL` | Diagram-to-code model |
 | `MERMAID_AUTO_REPAIR` | `true` | Enable model-assisted repair fallback |
+| `MERMAID_MAX_REPAIR_ATTEMPTS` | `1` | Targeted repair passes, `0` disables them, `2` is the cap |
+| `MERMAID_MAX_NODES` | `60` | Soft node budget that triggers one smaller-diagram retry, `0` disables |
 | `MAX_PROMPT_CHARS` | `6000` | Maximum text prompt length |
 | `RATE_LIMIT_MAX_REQUESTS` | `20` | Requests allowed per rate-limit window |
 

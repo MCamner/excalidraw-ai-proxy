@@ -104,3 +104,49 @@ Current repaired patterns:
 - `quoted_punctuation_labels`: quote flowchart node and edge labels containing Mermaid-significant punctuation.
 - `added_default_flowchart`: add `flowchart TD` when Mermaid output has no diagram header.
 - `openai_auto_repair`: use the model repair path after deterministic sanitizing when output still looks invalid.
+
+## Failure classification and targeted retry
+
+When the sanitized output still fails, `lib/mermaid-diagnostics.js` classifies
+the failure and `lib/mermaid-repair.js` sends that class — with the parser
+report — back to the model as a specific correction. A generic "try again"
+retry is not used.
+
+| Error type | Severity | Meaning |
+| --- | --- | --- |
+| `empty_diagram` | hard | Nothing left after sanitizing, or a header with no nodes |
+| `unknown_diagram_type` | hard | No Mermaid header the parser recognizes |
+| `unbalanced_subgraph` | hard | `subgraph` and `end` lines do not match |
+| `reserved_node_id` | hard | `end` used as a node ID |
+| `invalid_node_id` | hard | A node ID is not a single token, for example `my node[Label]` |
+| `unquoted_label` | hard | A label contains punctuation Mermaid reads as syntax |
+| `syntax_error` | hard | Any other parser error |
+| `unsupported_diagram_type` | soft | Parses, but is not a flowchart, sequence, or class diagram |
+| `node_limit_exceeded` | soft | Parses, but is larger than `MERMAID_MAX_NODES` |
+| `upstream_timeout` | — | The repair call timed out; the loop stops |
+| `upstream_error` | — | The repair call failed; the loop stops |
+
+Rules:
+
+- **Hard** failures fail the request with `502` if they survive the retries.
+- Mermaid accepts a bare `flowchart TD`, and the sanitizer produces exactly that
+  from prose-only or fence-only output. `empty_diagram` therefore also covers a
+  flowchart with zero nodes, so that case is repaired or failed rather than
+  streamed as a successful empty diagram. It is the only class where the repair
+  prompt also carries the original request, because the source itself contains
+  nothing to repair.
+- **Soft** failures are served. An importable diagram that is bigger than we
+  would like still beats no diagram.
+- At most `MERMAID_MAX_REPAIR_ATTEMPTS` model repairs, capped at two in code.
+  Each attempt is reclassified, so a second attempt targets whatever is wrong
+  *after* the first one.
+- The best candidate is kept: valid beats importable-but-flawed beats broken. A
+  retry cannot make the response worse.
+- Logs record error type, severity, node count, and attempt outcome
+  (`resolved`, `improved`, `unresolved`, `upstream_timeout`, `upstream_error`).
+  Prompts and diagram source are never logged — the raw parser message embeds
+  the diagram, so it goes to the model only.
+
+New failure classes need a fixture in `test/fixtures/mermaid/`, a case in
+`test/mermaid-diagnostics.test.js`, a repair instruction in
+`lib/mermaid-repair.js`, and a row in the table above.

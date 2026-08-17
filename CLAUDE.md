@@ -12,8 +12,10 @@ checkout of [Excalidraw OSS](https://github.com/excalidraw/excalidraw).
 | Path | Contents |
 | --- | --- |
 | `server.js` | Express app, env config, CORS, rate limiting, request logging |
-| `lib/excalidraw-routes.js` | Endpoint handlers, SSE streaming, model-assisted repair |
+| `lib/excalidraw-routes.js` | Endpoint handlers, SSE streaming, capabilities |
 | `lib/mermaid-sanitize.js` | Deterministic Mermaid repair pipeline |
+| `lib/mermaid-diagnostics.js` | Failure classification for Mermaid output |
+| `lib/mermaid-repair.js` | Targeted model repair loop driven by the failure class |
 | `lib/mermaid-parser.js` | Real Mermaid parser behind jsdom, used by `isValidMermaid` |
 | `lib/prompt-contracts.js` | Two system prompts (default/architecture) and the routing between them |
 | `lib/http-middleware.js` | CORS options, rate limiter, error handler |
