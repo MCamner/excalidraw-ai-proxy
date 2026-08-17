@@ -292,6 +292,91 @@ test("text-to-diagram route fails prose-only output when repair is disabled", as
   }
 });
 
+test("text-to-diagram route routes an architecture prompt to the architecture model", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, architectureModel: "test-strong-model", repairModel: "test-small-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "arkitektur" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-strong-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route keeps an ordinary prompt on the default model", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, architectureModel: "test-strong-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "a login flow" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-text-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route sends the repair pass to the repair model", async () => {
+  const openai = createFakeOpenAI({
+    mermaidChunks: ["flowchart TD\n  subgraph S1[Group]\n    A[Start] --> B[Done]"],
+    repairChunks: ["flowchart TD\n  A[Start] --> B[Done]"],
+  });
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, repairModel: "test-small-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "simple flow" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-text-model");
+    assert.equal(openai.chatCalls[1].model, "test-small-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("diagram-to-code route uses the diagram-to-code model and clamps its token budget", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, diagramToCodeModel: "gpt-4o-mini", diagramToCodeMaxTokens: 40_000 },
+  });
+  const server = await listen(app);
+
+  try {
+    await fetch(`${server.url}/v1/ai/diagram-to-code/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: "data:image/png;base64,test" }),
+    });
+
+    assert.equal(openai.responseCalls[0].model, "gpt-4o-mini");
+    assert.equal(openai.responseCalls[0].max_output_tokens, 16_384);
+  } finally {
+    await close(server.instance);
+  }
+});
+
 test("text-to-diagram route selects the prompt contract from the prompt", async () => {
   const openai = createFakeOpenAI();
   const server = await listen(createTestApp(openai));
@@ -442,12 +527,15 @@ function createTestApp(openai) {
 
 function createFakeOpenAI({ mermaidChunks, repairChunks } = {}) {
   const chatCalls = [];
+  const responseCalls = [];
   const defaultChunks = ["flowchart TD\n", "  A -- ok --> B"];
 
   return {
     chatCalls,
+    responseCalls,
     responses: {
-      async create() {
+      async create(params) {
+        responseCalls.push(params);
         return { output_text: " <main>ok</main> " };
       },
     },

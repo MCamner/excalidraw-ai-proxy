@@ -216,22 +216,40 @@ Success criteria:
 
 ## Phase 8: Provider-Neutral Model Routing
 
-Status: not started.
+Status: complete.
 
-A thin model registry above the OpenAI client, describing `supports_json`,
-`supports_streaming`, `max_output`, `diagram_quality_tier`, and `cost_tier`, so
-the proxy can pick a model per task: a cheap model for a simple flowchart, a
-stronger one for architecture, a small strict one for the repair pass.
+A thin model registry above the OpenAI client so the proxy picks a model per
+task instead of using one model for everything.
 
-Constraints if this is picked up:
+- [x] Add `lib/model-registry.js` with `supportsJson`, `supportsStreaming`,
+      `supportsImageInput`, `maxOutput`, `contextWindow`, `diagramQualityTier`,
+      and `costTier` per model.
+- [x] Route four tasks: text-to-diagram, text-to-diagram:architecture,
+      mermaid-repair, diagram-to-code.
+- [x] Resolve each task as configured model, then `OPENAI_MODEL_POOL`, then
+      fallback, so the proxy never calls a model the operator did not name.
+- [x] Pick from the pool by task requirements: cheapest that can stream for a
+      plain flowchart, strongest for architecture, cheapest small one for the
+      repair pass, image input for diagram-to-code.
+- [x] Clamp the configured token budget to a known model's documented limit.
+- [x] Treat an unlisted model as capable but unknown, so a newer model keeps
+      working without a registry update.
+- [x] Warn at startup when a known model is routed to a task it cannot perform.
+- [x] Report the resolved model, the reason, and the tiers in
+      `GET /v1/ai/capabilities`.
 
-- The API key stays server-side. No provider lock-in, and no provider SDK
-  leaking into the route handlers.
-- Routing decisions belong next to the prompt contracts, not inside the
-  endpoints.
-- This stays a proxy. It does not become an AI platform.
+Success criteria:
 
-Phase 7 comes first on purpose: routing between models is only worth doing once
+- [x] Default configuration resolves exactly as before this phase.
+- [x] The routing matrix is covered by tests, including the endpoints.
+- [x] No provider SDK leaks into the route handlers and no key reaches the
+      capabilities output.
+
+The registry stays a table. Adding a second provider means adding rows and a
+client, not rewriting the routes. This stays a proxy; it does not become an AI
+platform.
+
+Phase 7 came first on purpose: routing between models is only worth doing once
 the quality pipeline it feeds is stable and measurable.
 
 ## Not Now

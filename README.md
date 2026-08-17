@@ -186,6 +186,9 @@ are:
 | `OPENAI_MODEL` | `gpt-4.1-mini` | Fallback model for both tasks |
 | `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `OPENAI_MODEL` | Text-to-diagram model |
 | `OPENAI_DIAGRAM_TO_CODE_MODEL` | `OPENAI_MODEL` | Diagram-to-code model |
+| `OPENAI_ARCHITECTURE_MODEL` | text-to-diagram model | Model for architecture-contract requests |
+| `OPENAI_REPAIR_MODEL` | text-to-diagram model | Model for the Mermaid repair pass |
+| `OPENAI_MODEL_POOL` | empty | Models the proxy may pick from per task |
 | `MERMAID_AUTO_REPAIR` | `true` | Enable model-assisted repair fallback |
 | `MERMAID_MAX_REPAIR_ATTEMPTS` | `1` | Targeted repair passes, `0` disables them, `2` is the cap |
 | `MERMAID_MAX_NODES` | `60` | Soft node budget that triggers one smaller-diagram retry, `0` disables |
@@ -194,6 +197,36 @@ are:
 
 For higher-quality diagram-to-code output, use a stronger multimodal model for
 `OPENAI_DIAGRAM_TO_CODE_MODEL` while keeping text-to-diagram on a faster model.
+
+### Model routing
+
+The proxy resolves a model per task rather than using one model for everything.
+Four tasks are routed: `text-to-diagram`, `text-to-diagram:architecture`,
+`mermaid-repair`, and `diagram-to-code`. Resolution order per task is
+**configured model → pool → fallback**:
+
+1. The task's own setting wins if set.
+2. Otherwise, if `OPENAI_MODEL_POOL` lists models, the proxy picks from that
+   list using the capabilities in `lib/model-registry.js`: the cheapest model
+   that can stream for a plain flowchart, the strongest one for architecture,
+   the cheapest small one for the repair pass, and one that accepts image input
+   for diagram-to-code.
+3. Otherwise it falls back to the text-to-diagram model, then `OPENAI_MODEL`.
+
+The pool is opt-in on purpose. Without it the proxy only ever calls a model you
+named explicitly — it never upgrades to a more expensive model on its own.
+
+`GET /v1/ai/capabilities` reports the resolved model for each task under
+`modelRouting`, together with why it was chosen (`configured`, `pool`, or
+`fallback`) and its capability tiers, so a wrong model is visible without
+reading the logs. Known models also clamp the configured token budget to their
+documented output limit, and a model routed to a task it cannot perform is
+reported at startup.
+
+The registry is a table, not a provider abstraction: the API key stays
+server-side, there is one OpenAI client, and adding another provider means
+adding rows and a client — not rewriting the routes. Quality and cost tiers are
+routing labels, not benchmarks; edit them to match what you actually pay for.
 
 The two endpoints call different OpenAI APIs, so the models are not
 interchangeable:

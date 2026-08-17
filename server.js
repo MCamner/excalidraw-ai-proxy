@@ -9,6 +9,7 @@ import {
   handleHttpError,
 } from "./lib/http-middleware.js";
 import { sanitizeMermaid, sanitizeMermaidWithReport } from "./lib/mermaid-sanitize.js";
+import { parseModelPool, validateModelRouting } from "./lib/model-registry.js";
 import { createOpenAIClient } from "./lib/openai-client.js";
 
 export { sanitizeMermaid, sanitizeMermaidWithReport };
@@ -27,9 +28,15 @@ const allowedOrigins = (
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
-const textToDiagramModel = process.env.OPENAI_TEXT_TO_DIAGRAM_MODEL || model;
-const diagramToCodeModel = process.env.OPENAI_DIAGRAM_TO_CODE_MODEL || model;
+// Per-task models are read as "set or not set", not defaulted here: the model
+// registry resolves each task as configured -> pool -> fallback, and defaulting
+// early would make the pool unreachable.
+const defaultModel = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+const textToDiagramModel = process.env.OPENAI_TEXT_TO_DIAGRAM_MODEL || "";
+const diagramToCodeModel = process.env.OPENAI_DIAGRAM_TO_CODE_MODEL || "";
+const architectureModel = process.env.OPENAI_ARCHITECTURE_MODEL || "";
+const repairModel = process.env.OPENAI_REPAIR_MODEL || "";
+const modelPool = parseModelPool(process.env.OPENAI_MODEL_POOL);
 const openaiTimeoutMs = numberFromEnv("OPENAI_TIMEOUT_MS", 45_000);
 const openaiMaxRetries = numberFromEnv("OPENAI_MAX_RETRIES", 2);
 const textToDiagramTemperature = numberFromEnv("TEXT_TO_DIAGRAM_TEMPERATURE", 0.1);
@@ -46,8 +53,12 @@ const mermaidMaxRepairAttempts = boundedNumberFromEnv("MERMAID_MAX_REPAIR_ATTEMP
 // diagram, but never fails a request that already parses. 0 disables the check.
 const mermaidMaxNodes = boundedNumberFromEnv("MERMAID_MAX_NODES", 60, 0, 500);
 const routeConfig = {
+  defaultModel,
   textToDiagramModel,
   diagramToCodeModel,
+  architectureModel,
+  repairModel,
+  modelPool,
   textToDiagramTemperature,
   textToDiagramMaxTokens,
   diagramToCodeMaxTokens,
@@ -59,6 +70,14 @@ const routeConfig = {
 
 if (!process.env.OPENAI_API_KEY) {
   console.warn("OPENAI_API_KEY is not set. API calls will fail until .env is configured.");
+}
+
+// A model routed to a task it cannot perform fails as a provider error on the
+// first real request. Say so at startup instead.
+for (const problem of validateModelRouting(routeConfig)) {
+  console.warn(
+    `Model routing: ${problem.task} resolves to "${problem.model}" (${problem.problem}).`,
+  );
 }
 
 const openai = createOpenAIClient({

@@ -20,12 +20,18 @@ test("getCapabilities reports supported features without secrets", () => {
     streamingMode: "buffered-after-repair",
     mermaidAutoRepair: true,
     mermaidTargetedRepair: true,
+    modelRouting: true,
     promptContractModes: ["default", "architecture"],
   });
   assert.equal(capabilities.limits.mermaidMaxRepairAttempts, 1);
   assert.equal(capabilities.limits.mermaidMaxNodes, 60);
   assert.equal(capabilities.models.textToDiagram, "test-text-model");
   assert.equal(capabilities.models.diagramToCode, "test-code-model");
+  // Unset per-task models fall back to the text-to-diagram model.
+  assert.equal(capabilities.models.textToDiagramArchitecture, "test-text-model");
+  assert.equal(capabilities.models.mermaidRepair, "test-text-model");
+  assert.equal(capabilities.modelRouting["mermaid-repair"].reason, "fallback");
+  assert.equal(capabilities.modelRouting["text-to-diagram"].reason, "configured");
   assert.equal(serialized.includes("test-secret-key"), false);
   assert.equal(serialized.includes("OPENAI_API_KEY"), false);
 });

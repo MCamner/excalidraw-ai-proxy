@@ -18,6 +18,7 @@ checkout of [Excalidraw OSS](https://github.com/excalidraw/excalidraw).
 | `lib/mermaid-repair.js` | Targeted model repair loop driven by the failure class |
 | `lib/mermaid-parser.js` | Real Mermaid parser behind jsdom, used by `isValidMermaid` |
 | `lib/prompt-contracts.js` | Two system prompts (default/architecture) and the routing between them |
+| `lib/model-registry.js` | Model capabilities and per-task model selection |
 | `lib/http-middleware.js` | CORS options, rate limiter, error handler |
 | `test/` | `node --test` suite with mocked OpenAI clients |
 | `docs/AI_CONTRACT.md` | What the model may emit and which repairs exist |
