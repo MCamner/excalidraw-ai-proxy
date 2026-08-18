@@ -36,6 +36,18 @@ up in `.claude/skills/mermaid-repair/SKILL.md`.
 This project follows semantic versioning. Update the version in `package.json`
 only as part of a tagged GitHub release.
 
+Tags are annotated, never lightweight, and named `vMAJOR.MINOR.PATCH`. The
+subject names the release theme and the body says what changed, so `git tag -n`
+answers what a version contained without opening anything:
+
+```bash
+git tag -a v0.2.0 -m "v0.2.0 — diagram-aware retry, model routing"
+```
+
+Earlier tags predate this: `v0.1.0` carries only its own version as the subject
+and `v0.1.1` is lightweight. They are released and stay as they are — a pushed
+tag is published history and is not rewritten for style.
+
 Creating a GitHub release publishes `@mcamner/excalidraw-ai-proxy` to GitHub
 Packages through `.github/workflows/publish.yml`. Two things therefore have to
 hold before tagging:
