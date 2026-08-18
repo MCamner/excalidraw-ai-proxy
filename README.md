@@ -246,10 +246,10 @@ interchangeable:
 | [Installation](INSTALL.md) | Prerequisites, configuration, and verification |
 | [Examples](docs/EXAMPLES.md) | API request and response examples |
 | [AI output contract](docs/AI_CONTRACT.md) | Mermaid generation and repair rules |
-| [Architecture](docs/repo-diagram.md) | Repository flow and editable Excalidraw diagram |
-| [Roadmap](docs/ROADMAP.md) | Completed phases and future constraints |
+| [Architecture](https://github.com/MCamner/excalidraw-ai-proxy/blob/main/docs/repo-diagram.md) | Repository flow and editable Excalidraw diagram |
+| [Roadmap](https://github.com/MCamner/excalidraw-ai-proxy/blob/main/docs/ROADMAP.md) | Completed phases and future constraints |
 | [Security policy](SECURITY.md) | Private reporting and deployment scope |
-| [Contributing](CONTRIBUTING.md) | Development and pull-request workflow |
+| [Contributing](https://github.com/MCamner/excalidraw-ai-proxy/blob/main/CONTRIBUTING.md) | Development and pull-request workflow |
 
 ## Development
 
