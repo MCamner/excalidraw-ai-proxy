@@ -12,6 +12,8 @@ const config = {
   diagramToCodeMaxTokens: 4000,
   maxPromptChars: 20,
   mermaidAutoRepair: true,
+  mermaidMaxRepairAttempts: 1,
+  mermaidMaxNodes: 0,
 };
 
 test("health route returns ok", async () => {
@@ -198,6 +200,324 @@ test("text-to-diagram route rejects invalid Mermaid after repair", async () => {
   }
 });
 
+test("text-to-diagram route retries with the classified error and streams the repair", async () => {
+  const openai = createFakeOpenAI({
+    mermaidChunks: ["flowchart TD\n  subgraph S1[Group]\n", "    A[Start] --> B[Done]"],
+    repairChunks: ["flowchart TD\n  subgraph S1[\"Group\"]\n    A[Start] --> B[Done]\n  end"],
+  });
+  const server = await listen(createTestApp(openai));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(openai.chatCalls.length, 2);
+    assert.match(userPromptOf(openai.chatCalls[1]), /Error type: unbalanced_subgraph/);
+    assert.match(response.body, /subgraph/);
+    assert.match(response.body, /data: \[DONE\]/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route serves an importable diagram that stays over the node limit", async () => {
+  const large = [
+    "flowchart TD",
+    "  A[One] --> B[Two]",
+    "  B --> C[Three]",
+    "  C --> D[Four]",
+  ].join("\n");
+  const openai = createFakeOpenAI({ mermaidChunks: [large], repairChunks: [large] });
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, { openai, config: { ...config, mermaidMaxNodes: 2 } });
+  const server = await listen(app);
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(openai.chatCalls.length, 2);
+    assert.match(userPromptOf(openai.chatCalls[1]), /Error type: node_limit_exceeded/);
+    assert.match(response.body, /C --> D\[Four\]/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+// Regression: the sanitizer turns prose into a bare `flowchart TD`, which the
+// Mermaid parser accepts. Without the empty-diagram class this was streamed to
+// Excalidraw as a successful, node-less diagram.
+test("text-to-diagram route repairs prose-only output instead of streaming an empty diagram", async () => {
+  const openai = createFakeOpenAI({
+    mermaidChunks: ["Here is a diagram: nice"],
+    repairChunks: ["flowchart TD\n  U[User] --> S[Session]"],
+  });
+  const server = await listen(createTestApp(openai));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "a login flow" }],
+    });
+
+    assert.equal(response.status, 200);
+    assert.match(userPromptOf(openai.chatCalls[1]), /Error type: empty_diagram/);
+    assert.match(userPromptOf(openai.chatCalls[1]), /Original request:\na login flow/);
+    assert.match(response.body, /U\[User\] --> S\[Session\]/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route fails prose-only output when repair is disabled", async () => {
+  const openai = createFakeOpenAI({ mermaidChunks: ["Here is a diagram: nice"] });
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, { openai, config: { ...config, mermaidAutoRepair: false } });
+  const server = await listen(app);
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "a login flow" }],
+    });
+
+    assert.equal(response.status, 502);
+    assert.equal(response.body, "OpenAI returned invalid Mermaid after repair");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route routes an architecture prompt to the architecture model", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, architectureModel: "test-strong-model", repairModel: "test-small-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "arkitektur" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-strong-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route keeps an ordinary prompt on the default model", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, architectureModel: "test-strong-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "a login flow" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-text-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route sends the repair pass to the repair model", async () => {
+  const openai = createFakeOpenAI({
+    mermaidChunks: ["flowchart TD\n  subgraph S1[Group]\n    A[Start] --> B[Done]"],
+    repairChunks: ["flowchart TD\n  A[Start] --> B[Done]"],
+  });
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, repairModel: "test-small-model" },
+  });
+  const server = await listen(app);
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "simple flow" }] });
+
+    assert.equal(openai.chatCalls[0].model, "test-text-model");
+    assert.equal(openai.chatCalls[1].model, "test-small-model");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("diagram-to-code route uses the diagram-to-code model and clamps its token budget", async () => {
+  const openai = createFakeOpenAI();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+  registerExcalidrawRoutes(app, {
+    openai,
+    config: { ...config, diagramToCodeModel: "gpt-4o-mini", diagramToCodeMaxTokens: 40_000 },
+  });
+  const server = await listen(app);
+
+  try {
+    await fetch(`${server.url}/v1/ai/diagram-to-code/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: "data:image/png;base64,test" }),
+    });
+
+    assert.equal(openai.responseCalls[0].model, "gpt-4o-mini");
+    assert.equal(openai.responseCalls[0].max_output_tokens, 16_384);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route selects the prompt contract from the prompt", async () => {
+  const openai = createFakeOpenAI();
+  const server = await listen(createTestApp(openai));
+
+  try {
+    await postPrompt(server.url, { messages: [{ role: "user", content: "visa arkitekturen" }] });
+
+    assert.match(systemPromptOf(openai.chatCalls[0]), /describing a software architecture/);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route honours an explicit mode over the prompt heuristic", async () => {
+  const architectureByMode = createFakeOpenAI();
+  const defaultByMode = createFakeOpenAI();
+  const first = await listen(createTestApp(architectureByMode));
+  const second = await listen(createTestApp(defaultByMode));
+
+  try {
+    await postPrompt(first.url, {
+      messages: [{ role: "user", content: "a login flow" }],
+      mode: "architecture",
+    });
+    await postPrompt(second.url, {
+      messages: [{ role: "user", content: "visa arkitekturen" }],
+      mode: "default",
+    });
+
+    assert.match(
+      systemPromptOf(architectureByMode.chatCalls[0]),
+      /describing a software architecture/,
+    );
+    assert.doesNotMatch(
+      systemPromptOf(defaultByMode.chatCalls[0]),
+      /describing a software architecture/,
+    );
+  } finally {
+    await close(first.instance);
+    await close(second.instance);
+  }
+});
+
+test("text-to-diagram route reads the last user message, flattening array content", async () => {
+  const openai = createFakeOpenAI();
+  const server = await listen(createTestApp(openai));
+
+  try {
+    await postPrompt(server.url, {
+      messages: [
+        { role: "user", content: "stale prompt" },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "boxes" },
+            { type: "text", text: "arrows" },
+          ],
+        },
+        { role: "assistant", content: "sure" },
+      ],
+    });
+
+    assert.equal(userPromptOf(openai.chatCalls[0]), "boxes\narrows");
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route keeps buffered Mermaid when the stream closes prematurely", async () => {
+  const server = await listen(createTestApp(createTruncatedStreamOpenAI({
+    chunks: ["flowchart TD\n", "  A -- ok --> B"],
+  })));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.match(response.body, /flowchart TD/);
+    assert.match(response.body, /A -->\|ok\| B/);
+    assert.match(response.body, /data: \[DONE\]/);
+    assert.equal(response.status, 200);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+test("text-to-diagram route fails when the stream closes before any content", async () => {
+  const server = await listen(createTestApp(createTruncatedStreamOpenAI({ chunks: [] })));
+
+  try {
+    const response = await postPrompt(server.url, {
+      messages: [{ role: "user", content: "simple flow" }],
+    });
+
+    assert.equal(response.status, 500);
+  } finally {
+    await close(server.instance);
+  }
+});
+
+function createTruncatedStreamOpenAI({ chunks }) {
+  return {
+    responses: {
+      async create() {
+        return { output_text: "<main>ok</main>" };
+      },
+    },
+    chat: {
+      completions: {
+        async create() {
+          return (async function* stream() {
+            for (const content of chunks) {
+              yield { choices: [{ delta: { content } }] };
+            }
+            throw new Error("Premature close");
+          })();
+        },
+      },
+    },
+  };
+}
+
+async function postPrompt(url, body) {
+  const response = await fetch(`${url}/v1/ai/text-to-diagram/chat-streaming`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  return { status: response.status, body: await response.text() };
+}
+
+function systemPromptOf(call) {
+  return call.messages.find((message) => message.role === "system").content;
+}
+
+function userPromptOf(call) {
+  return call.messages.find((message) => message.role === "user").content;
+}
+
 function createTestApp(openai) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -206,24 +526,33 @@ function createTestApp(openai) {
 }
 
 function createFakeOpenAI({ mermaidChunks, repairChunks } = {}) {
-  let chatCallCount = 0;
+  const chatCalls = [];
+  const responseCalls = [];
+  const defaultChunks = ["flowchart TD\n", "  A -- ok --> B"];
 
   return {
+    chatCalls,
+    responseCalls,
     responses: {
-      async create() {
+      async create(params) {
+        responseCalls.push(params);
         return { output_text: " <main>ok</main> " };
       },
     },
     chat: {
       completions: {
-        async create() {
-          chatCallCount += 1;
-          const chunks = chatCallCount === 1
-            ? mermaidChunks ?? ["flowchart TD\n", "  A -- ok --> B"]
-            : repairChunks ?? mermaidChunks ?? ["flowchart TD\n", "  A -- ok --> B"];
-          return chunks.map((content) => ({
-            choices: [{ delta: { content } }],
-          }));
+        async create(params) {
+          chatCalls.push(params);
+
+          // Generation is streamed, repair is a single buffered completion.
+          if (params.stream) {
+            return (mermaidChunks ?? defaultChunks).map((content) => ({
+              choices: [{ delta: { content } }],
+            }));
+          }
+
+          const content = (repairChunks ?? mermaidChunks ?? defaultChunks).join("");
+          return { choices: [{ message: { content } }] };
         },
       },
     },

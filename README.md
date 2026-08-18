@@ -55,6 +55,41 @@ The text-to-diagram endpoint buffers the model stream, removes incompatible
 Mermaid syntax, optionally repairs invalid output, and then returns normalized
 SSE chunks. See [examples](docs/EXAMPLES.md) for request and response shapes.
 
+When the sanitized output still does not parse, the proxy classifies *why* —
+unbalanced subgraph, `end` used as a node ID, a node ID with a space, an
+unquoted label, a diagram type Excalidraw cannot import, too many nodes — and
+sends that specific error back to the model as a targeted repair instruction
+instead of a generic retry. It keeps the best candidate it has seen, so a retry
+can never make the response worse than the first attempt. See the
+[AI output contract](docs/AI_CONTRACT.md) for the failure classes and their
+severity.
+
+Buffering also makes the endpoint tolerant of a truncated upstream stream: if
+the OpenAI connection closes prematurely *after* content has arrived, the proxy
+normalizes what it received instead of failing the request. A premature close
+with no content is still an error.
+
+## Prompt contracts
+
+Text-to-diagram uses one of two system prompts. The **default** contract asks
+for a plain flowchart. The **architecture** contract additionally requires
+`subgraph` grouping and quotes every label. Neither contract states a node
+count: diagram size is owned by `MERMAID_MAX_NODES` alone, so the prompt and the
+runtime budget cannot disagree.
+
+The proxy selects the contract per request. Send `"mode": "architecture"` or
+`"mode": "default"` in the request body to choose explicitly; otherwise a
+bilingual Swedish/English heuristic inspects the prompt. Terms like
+`arkitektur`, `architecture`, `microservice`, or `component diagram` select the
+architecture contract on their own, while weaker terms like `component` or
+`data flow` only do so alongside architecture context — `show the system
+components` routes to architecture, `show the components of a form` does not.
+
+Because the architecture contract is more constrained, use an explicit `mode`
+when the choice matters. Available modes are listed in
+`GET /v1/ai/capabilities` under `features.promptContractModes`. See the
+[AI output contract](docs/AI_CONTRACT.md) for both contracts in full.
+
 ## Quick start
 
 Requirements: Node.js 20 or later, npm, an OpenAI API key, and a local
@@ -150,14 +185,58 @@ are:
 | `PORT` | `3016` | Proxy port |
 | `HOST` | `127.0.0.1` | Bind address |
 | `ALLOWED_ORIGINS` | localhost on port `3003` | Browser origins allowed by CORS |
-| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `gpt-4.1-mini` | Text-to-diagram model |
-| `OPENAI_DIAGRAM_TO_CODE_MODEL` | `gpt-4.1-mini` | Diagram-to-code model |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | Fallback model for both tasks |
+| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | `OPENAI_MODEL` | Text-to-diagram model |
+| `OPENAI_DIAGRAM_TO_CODE_MODEL` | `OPENAI_MODEL` | Diagram-to-code model |
+| `OPENAI_ARCHITECTURE_MODEL` | text-to-diagram model | Model for architecture-contract requests |
+| `OPENAI_REPAIR_MODEL` | text-to-diagram model | Model for the Mermaid repair pass |
+| `OPENAI_MODEL_POOL` | empty | Models the proxy may pick from per task |
 | `MERMAID_AUTO_REPAIR` | `true` | Enable model-assisted repair fallback |
+| `MERMAID_MAX_REPAIR_ATTEMPTS` | `1` | Targeted repair passes, `0` disables them, `2` is the cap |
+| `MERMAID_MAX_NODES` | `60` | Soft node budget that triggers one smaller-diagram retry, `0` disables |
 | `MAX_PROMPT_CHARS` | `6000` | Maximum text prompt length |
 | `RATE_LIMIT_MAX_REQUESTS` | `20` | Requests allowed per rate-limit window |
 
 For higher-quality diagram-to-code output, use a stronger multimodal model for
 `OPENAI_DIAGRAM_TO_CODE_MODEL` while keeping text-to-diagram on a faster model.
+
+### Model routing
+
+The proxy resolves a model per task rather than using one model for everything.
+Four tasks are routed: `text-to-diagram`, `text-to-diagram:architecture`,
+`mermaid-repair`, and `diagram-to-code`. Resolution order per task is
+**configured model → pool → fallback**:
+
+1. The task's own setting wins if set.
+2. Otherwise, if `OPENAI_MODEL_POOL` lists models, the proxy picks from that
+   list using the capabilities in `lib/model-registry.js`: the cheapest model
+   that can stream for a plain flowchart, the strongest one for architecture,
+   the cheapest small one for the repair pass, and one that accepts image input
+   for diagram-to-code.
+3. Otherwise it falls back to the text-to-diagram model, then `OPENAI_MODEL`.
+
+The pool is opt-in on purpose. Without it the proxy only ever calls a model you
+named explicitly — it never upgrades to a more expensive model on its own.
+
+`GET /v1/ai/capabilities` reports the resolved model for each task under
+`modelRouting`, together with why it was chosen (`configured`, `pool`, or
+`fallback`) and its capability tiers, so a wrong model is visible without
+reading the logs. Known models also clamp the configured token budget to their
+documented output limit, and a model routed to a task it cannot perform is
+reported at startup.
+
+The registry is a table, not a provider abstraction: the API key stays
+server-side, there is one OpenAI client, and adding another provider means
+adding rows and a client — not rewriting the routes. Quality and cost tiers are
+routing labels, not benchmarks; edit them to match what you actually pay for.
+
+The two endpoints call different OpenAI APIs, so the models are not
+interchangeable:
+
+| Setting | OpenAI API | Model must support |
+| --- | --- | --- |
+| `OPENAI_TEXT_TO_DIAGRAM_MODEL` | Chat Completions | streaming |
+| `OPENAI_DIAGRAM_TO_CODE_MODEL` | Responses | image input |
 
 ## Documentation
 

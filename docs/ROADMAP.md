@@ -185,6 +185,73 @@ Success criteria:
 - [x] CI does not require a real `OPENAI_API_KEY`.
 - [x] Runtime dependencies remain unchanged.
 
+## Phase 7: Diagram-Aware Retry
+
+Status: complete.
+
+The sanitizer fixes what is deterministically fixable. Everything else used to
+get one generic "repair this" pass, which is a weak signal for the model and
+gives the logs nothing to aggregate. Phase 7 classifies the failure first and
+retries against that specific error.
+
+- [x] Add `lib/mermaid-diagnostics.js` with a fixed vocabulary of failure types.
+- [x] Classify parser failures: unbalanced subgraph, `end` as node ID, invalid
+      node ID, unquoted label, unknown diagram type, other syntax errors.
+- [x] Classify importable-but-flawed output: unsupported diagram type for the
+      Excalidraw importer, node count above the budget.
+- [x] Treat a flowchart header with no nodes as an empty diagram.
+- [x] Add `lib/mermaid-repair.js` with one targeted instruction per failure type.
+- [x] Reclassify between attempts and cap the loop at two model repairs.
+- [x] Keep the best candidate so a retry cannot make the response worse.
+- [x] Serve soft failures, fail hard failures with `502`.
+- [x] Log failure type, severity, node count, and attempt outcome only.
+- [x] Report the limits in `GET /v1/ai/capabilities`.
+
+Success criteria:
+
+- [x] Each failure class has a fixture and a diagnostics test.
+- [x] The repair prompt contains the classified error, proven by test.
+- [x] Prompts and diagram source stay out of the logs.
+- [x] `npm test` covers the retry loop and the endpoint behavior.
+
+## Phase 8: Provider-Neutral Model Routing
+
+Status: complete.
+
+A thin model registry above the OpenAI client so the proxy picks a model per
+task instead of using one model for everything.
+
+- [x] Add `lib/model-registry.js` with `supportsJson`, `supportsStreaming`,
+      `supportsImageInput`, `maxOutput`, `contextWindow`, `diagramQualityTier`,
+      and `costTier` per model.
+- [x] Route four tasks: text-to-diagram, text-to-diagram:architecture,
+      mermaid-repair, diagram-to-code.
+- [x] Resolve each task as configured model, then `OPENAI_MODEL_POOL`, then
+      fallback, so the proxy never calls a model the operator did not name.
+- [x] Pick from the pool by task requirements: cheapest that can stream for a
+      plain flowchart, strongest for architecture, cheapest small one for the
+      repair pass, image input for diagram-to-code.
+- [x] Clamp the configured token budget to a known model's documented limit.
+- [x] Treat an unlisted model as capable but unknown, so a newer model keeps
+      working without a registry update.
+- [x] Warn at startup when a known model is routed to a task it cannot perform.
+- [x] Report the resolved model, the reason, and the tiers in
+      `GET /v1/ai/capabilities`.
+
+Success criteria:
+
+- [x] Default configuration resolves exactly as before this phase.
+- [x] The routing matrix is covered by tests, including the endpoints.
+- [x] No provider SDK leaks into the route handlers and no key reaches the
+      capabilities output.
+
+The registry stays a table. Adding a second provider means adding rows and a
+client, not rewriting the routes. This stays a proxy; it does not become an AI
+platform.
+
+Phase 7 came first on purpose: routing between models is only worth doing once
+the quality pipeline it feeds is stable and measurable.
+
 ## Not Now
 
 - Do not add more AI endpoints before the current contracts are tested.

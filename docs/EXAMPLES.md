@@ -50,6 +50,53 @@ data: [DONE]
 Exact diagram content depends on the prompt and configured model. The response
 shape above is the stable proxy contract.
 
+To pick the prompt contract explicitly instead of relying on the heuristic, add
+`mode`:
+
+```json
+{
+  "messages": [{ "role": "user", "content": "show the components of a form" }],
+  "mode": "architecture"
+}
+```
+
+Accepted values are `"default"` and `"architecture"`. Unknown or missing values
+fall back to prompt-based selection. See the
+[AI output contract](AI_CONTRACT.md) for what each contract requires.
+
+### Message handling
+
+The proxy uses the **last message with `role: "user"`**, not the last message in
+the array, so a trailing assistant turn does not break the request. Message
+`content` may be a plain string or an array of parts; array parts are flattened
+to text, joined with newlines, and non-text parts are ignored:
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "stale prompt" },
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "boxes" },
+        { "type": "text", "text": "arrows" }
+      ]
+    },
+    { "role": "assistant", "content": "sure" }
+  ]
+}
+```
+
+The prompt sent to the model is `boxes\narrows`. `MAX_PROMPT_CHARS` is measured
+against that flattened text.
+
+### Truncated upstream streams
+
+If the OpenAI stream closes prematurely after some content has arrived, the
+proxy normalizes the buffered content and returns it rather than failing. A
+premature close before any content arrives is rethrown and surfaces as `500`
+with the generic `Upstream service error` body.
+
 ## Diagram to code
 
 Excalidraw sends a data URL for the rendered diagram, extracted text, and the
@@ -82,5 +129,14 @@ Successful responses contain one self-contained HTML document:
 - `400 Missing messages`: include a non-empty `messages` array.
 - `400 Missing image`: include the diagram as a data URL in `image`.
 - `413 Prompt is too long`: shorten the prompt or adjust `MAX_PROMPT_CHARS`.
-- `429 Too many requests`: wait for the `Retry-After` interval.
+- `429 Too many requests`: wait for the `Retry-After` interval. The same value
+  is in the JSON body as `retryAfterSeconds`, so clients can back off without
+  reading headers:
+
+  ```json
+  {"message":"Too many requests","retryAfterSeconds":42}
+  ```
+
+  Rate limiting is per client IP, in-memory, and resets per
+  `RATE_LIMIT_WINDOW_MS` window.
 - CORS rejection: add the exact Excalidraw origin to `ALLOWED_ORIGINS`.
