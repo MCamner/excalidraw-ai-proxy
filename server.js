@@ -95,12 +95,19 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const latencyMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     const repair = res.locals.mermaidRepair;
+    const route = res.locals.modelRoute;
     console.info(
       JSON.stringify({
         event: "request_completed",
         endpoint: `${req.method} ${req.path}`,
         statusCode: res.statusCode,
         latencyMs: Math.round(latencyMs),
+        task: route?.task,
+        contractMode: route?.contractMode,
+        model: route?.model,
+        modelReason: route?.modelReason,
+        repairModel: route?.repairModel,
+        repairModelReason: route?.repairModelReason,
         repairApplied: Boolean(repair?.repairApplied),
         autoRepairApplied: Boolean(repair?.autoRepairApplied),
         repairReasons: repair?.repairReasons || [],
