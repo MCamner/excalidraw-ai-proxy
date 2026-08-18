@@ -3,12 +3,12 @@
 [![CI](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml/badge.svg)](https://github.com/MCamner/excalidraw-ai-proxy/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/MCamner/excalidraw-ai-proxy)](https://github.com/MCamner/excalidraw-ai-proxy/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![npm package](https://img.shields.io/badge/package-%40mcamner%2Fexcalidraw--ai--proxy-blue)](https://github.com/MCamner/excalidraw-ai-proxy/pkgs/npm/excalidraw-ai-proxy)
 
 A local Node.js proxy that enables Excalidraw OSS AI features without exposing
 your OpenAI API key to the browser.
 
-This repository is distributed as source through GitHub releases. It is not an
-npm package; `"private": true` intentionally prevents accidental publication.
+This repository is distributed as source through GitHub releases and is also published as the `@mcamner/excalidraw-ai-proxy` npm package on GitHub Packages.
 
 It implements Excalidraw-compatible text-to-diagram and diagram-to-code
 endpoints, repairs common Mermaid failures, and keeps model access and secrets
