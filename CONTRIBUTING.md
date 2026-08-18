@@ -34,8 +34,27 @@ up in `.claude/skills/mermaid-repair/SKILL.md`.
 ## Versioning and distribution
 
 This project follows semantic versioning. Update the version in `package.json`
-only as part of a tagged GitHub release. The proxy is installed from source and
-is intentionally marked private so it cannot be published to npm accidentally.
+only as part of a tagged GitHub release.
+
+Creating a GitHub release publishes `@mcamner/excalidraw-ai-proxy` to GitHub
+Packages through `.github/workflows/publish.yml`. Two things therefore have to
+hold before tagging:
+
+1. The tag and `package.json` agree. CI verifies this before `npm publish`, and
+   you can check it locally first:
+
+   ```bash
+   node scripts/check-release-version.mjs v0.2.0
+   ```
+
+2. The package ships what it should. The `files` field in `package.json` is the
+   contract — runtime code plus the documentation a consumer needs, nothing
+   else — and `test/package-contents.test.js` asserts the real `npm pack`
+   output against it. Inspect it with:
+
+   ```bash
+   npm pack --dry-run
+   ```
 
 ## Pull requests
 
