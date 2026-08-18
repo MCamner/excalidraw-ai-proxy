@@ -20,6 +20,11 @@ jobs:
 
       - run: npm ci
 
+      # Fail before publishing, not inside npm, when the tag and package.json
+      # disagree. A release cut without a version bump otherwise dies on a 409.
+      - name: Verify the release tag matches package.json
+        run: node scripts/check-release-version.mjs "${{ github.event.release.tag_name }}"
+
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -49,7 +49,7 @@ test("published package never contains the local .env", () => {
 });
 
 test("published package excludes tests and development material", () => {
-  const excludedPrefixes = ["test/", ".github/", ".claude/", "node_modules/"];
+  const excludedPrefixes = ["test/", ".github/", ".claude/", "scripts/", "node_modules/"];
   // ROADMAP and the editable repo diagram are material for developing the
   // proxy, not for using it.
   const excludedFiles = [

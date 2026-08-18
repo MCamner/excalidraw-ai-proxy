@@ -1,6 +1,6 @@
 {
   "name": "@mcamner/excalidraw-ai-proxy",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Local server-side proxy for Excalidraw OSS AI features.",
   "publishConfig": {
     "access": "restricted",
