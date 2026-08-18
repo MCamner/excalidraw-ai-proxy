@@ -17,12 +17,13 @@ test("systemPromptFor returns the architecture contract for system prompts", () 
   assert.equal(prompt, promptContracts.architecture);
   assert.match(prompt, /Group related components with subgraph blocks/);
   assert.match(prompt, /Do not use classDef/);
+  assert.doesNotMatch(prompt, /at most 25 nodes/i);
 });
 
-// Routing matrix. Architecture mode imposes materially different constraints
-// (mandatory subgraphs, a 25-node cap), so a false positive silently narrows
-// what the user asked for. Both languages are covered because the heuristic is
-// bilingual.
+// Routing matrix. Architecture mode imposes materially different structural
+// constraints (mandatory subgraphs and fully quoted labels), so a false positive
+// still narrows what the user asked for. Diagram size is enforced separately by
+// the runtime MERMAID_MAX_NODES policy.
 const routingCases = [
   // Strong signals: architecture on their own.
   { prompt: "visa arkitekturen", expected: "architecture" },
