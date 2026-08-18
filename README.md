@@ -73,7 +73,9 @@ with no content is still an error.
 
 Text-to-diagram uses one of two system prompts. The **default** contract asks
 for a plain flowchart. The **architecture** contract additionally requires
-`subgraph` grouping, quotes every label, and caps the diagram at 25 nodes.
+`subgraph` grouping and quotes every label. Neither contract states a node
+count: diagram size is owned by `MERMAID_MAX_NODES` alone, so the prompt and the
+runtime budget cannot disagree.
 
 The proxy selects the contract per request. Send `"mode": "architecture"` or
 `"mode": "default"` in the request body to choose explicitly; otherwise a

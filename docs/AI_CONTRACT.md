@@ -2,7 +2,8 @@
 
 There are two text-to-diagram contracts. Both are defined in
 `lib/prompt-contracts.js` and both require Mermaid flowchart code only, but the
-architecture contract adds structural requirements and a size cap.
+architecture contract adds structural requirements. Neither states a diagram
+size: capacity is owned by `MERMAID_MAX_NODES`.
 
 ## Contract selection
 
@@ -79,10 +80,15 @@ applies, plus:
 - **Every** node label, subgraph title, and edge label quoted — not only the
   ones containing punctuation.
 - Reserved words such as `end` must not be used as node IDs.
-- **At most 25 nodes.**
+- A concise, readable architecture without unnecessary intermediate nodes.
 
-The node cap and mandatory subgraphs are the reason contract selection matters:
-a request routed here by mistake gets a materially more constrained diagram.
+The contract no longer states a node count. Diagram size is owned by
+`MERMAID_MAX_NODES` alone, so the prompt and the runtime budget cannot disagree:
+the contract describes quality and structure, the configuration owns capacity.
+
+Mandatory subgraphs and fully quoted labels are why contract selection still
+matters: a request routed here by mistake gets a materially more constrained
+diagram.
 
 ## Repair policy
 
@@ -140,8 +146,11 @@ Rules:
 - At most `MERMAID_MAX_REPAIR_ATTEMPTS` model repairs, capped at two in code.
   Each attempt is reclassified, so a second attempt targets whatever is wrong
   *after* the first one.
-- The best candidate is kept: valid beats importable-but-flawed beats broken. A
-  retry cannot make the response worse.
+- The best candidate is kept: valid beats importable-but-flawed beats broken,
+  and within one severity a diagram closer to the budget beats one further from
+  it — a retry that goes from 15 nodes to 9 against a budget of 8 is adopted and
+  reported as `improved`, not discarded as `unresolved`. A retry cannot make
+  the response worse.
 - Logs record error type, severity, node count, and attempt outcome
   (`resolved`, `improved`, `unresolved`, `upstream_timeout`, `upstream_error`).
   Prompts and diagram source are never logged — the raw parser message embeds

@@ -200,6 +200,35 @@ test("buildRepairPrompt falls back to the generic instruction for unknown types"
   assert.match(prompt, /flowchart TD/);
 });
 
+// A soft failure has degrees. Ranking only by severity discarded a retry that
+// did most of the work and reported it as unresolved.
+test("repairMermaid keeps a retry that shrinks a diagram without reaching the budget", async () => {
+  const openai = createFakeOpenAI([buildFlowchart(9)]);
+
+  const report = await repairMermaid(buildFlowchart(15), {
+    openai,
+    config: { ...config, mermaidMaxNodes: 8, mermaidMaxRepairAttempts: 1 },
+  });
+
+  assert.equal(report.nodeCount, 9);
+  assert.equal(report.severity, "soft");
+  assert.deepEqual(report.repairAttempts, [
+    { attempt: 1, errorType: mermaidErrorTypes.nodeLimitExceeded, outcome: "improved" },
+  ]);
+});
+
+test("repairMermaid does not adopt a retry that grows the diagram", async () => {
+  const openai = createFakeOpenAI([buildFlowchart(20)]);
+
+  const report = await repairMermaid(buildFlowchart(15), {
+    openai,
+    config: { ...config, mermaidMaxNodes: 8, mermaidMaxRepairAttempts: 1 },
+  });
+
+  assert.equal(report.nodeCount, 15);
+  assert.equal(report.repairAttempts[0].outcome, "unresolved");
+});
+
 function buildFlowchart(nodeCount) {
   const lines = ["flowchart TD"];
   for (let index = 1; index < nodeCount; index += 1) {

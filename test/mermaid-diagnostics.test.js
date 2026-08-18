@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   classifyUpstreamError,
+  compareDiagnoses,
   countFlowchartNodes,
   diagnoseMermaid,
   diagnosisRank,
@@ -144,6 +145,16 @@ test("classifyUpstreamError separates timeouts from other upstream failures", ()
 
   assert.equal(classifyUpstreamError(timeout), mermaidErrorTypes.upstreamTimeout);
   assert.equal(classifyUpstreamError(new Error("connection reset")), mermaidErrorTypes.upstreamError);
+});
+
+test("compareDiagnoses ranks a smaller over-budget diagram above a larger one", () => {
+  const smaller = { ok: false, severity: "soft", errorType: mermaidErrorTypes.nodeLimitExceeded, nodeCount: 9 };
+  const larger = { ok: false, severity: "soft", errorType: mermaidErrorTypes.nodeLimitExceeded, nodeCount: 15 };
+
+  assert.ok(compareDiagnoses(smaller, larger) > 0);
+  assert.ok(compareDiagnoses(larger, smaller) < 0);
+  assert.equal(compareDiagnoses(smaller, smaller), 0);
+  assert.ok(compareDiagnoses({ ok: true }, smaller) > 0);
 });
 
 test("diagnosisRank prefers valid over importable-but-flawed over broken", () => {
