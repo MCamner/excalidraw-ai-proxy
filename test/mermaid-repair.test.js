@@ -99,8 +99,24 @@ test("repairMermaid retries an importable diagram that is over the node limit", 
   });
 
   assert.match(userMessageOf(openai.calls[0]), /Error type: node_limit_exceeded/);
+  assert.match(userMessageOf(openai.calls[0]), /at most 4 semantic nodes/);
+  assert.match(userMessageOf(openai.calls[0]), /Subgraphs improve grouping but do not reduce the node count/);
+  assert.match(userMessageOf(openai.calls[0]), /final node count is 4 or fewer/);
   assert.equal(report.errorType, "");
   assert.equal(report.nodeCount, 2);
+});
+
+test("buildRepairPrompt makes the configured node budget explicit", () => {
+  const prompt = buildRepairPrompt(
+    { errorType: mermaidErrorTypes.nodeLimitExceeded, detail: "9 nodes" },
+    buildFlowchart(9),
+    { maxNodes: 8 },
+  );
+
+  assert.match(prompt, /at most 8 semantic nodes/);
+  assert.match(prompt, /Count every declared node exactly once/);
+  assert.match(prompt, /Subgraphs improve grouping but do not reduce the node count/);
+  assert.match(prompt, /final node count is 8 or fewer/);
 });
 
 test("repairMermaid records an upstream timeout and keeps what it has", async () => {
