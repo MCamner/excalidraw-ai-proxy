@@ -19,6 +19,19 @@
     "node": ">=20"
   },
   "type": "module",
+  "files": [
+    "server.js",
+    "lib/",
+    "docs/AI_CONTRACT.md",
+    "docs/EXAMPLES.md",
+    ".env.example",
+    "README.md",
+    "INSTALL.md",
+    "QUICKSTART.md",
+    "SECURITY.md",
+    "WIKI.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",

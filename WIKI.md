@@ -10,8 +10,8 @@ the endpoint shapes expected by Excalidraw.
 - [Full installation guide](INSTALL.md)
 - [API examples](docs/EXAMPLES.md)
 - [AI output contract](docs/AI_CONTRACT.md)
-- [Architecture](docs/repo-diagram.md)
-- [Roadmap](docs/ROADMAP.md)
+- [Architecture](https://github.com/MCamner/excalidraw-ai-proxy/blob/main/docs/repo-diagram.md)
+- [Roadmap](https://github.com/MCamner/excalidraw-ai-proxy/blob/main/docs/ROADMAP.md)
 
 ## Supported endpoints
 
